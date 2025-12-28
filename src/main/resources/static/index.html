@@ -1,0 +1,834 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Monitor de Leilões Superbid</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        header {
+            background: white;
+            border-radius: 12px;
+            padding: 30px;
+            margin-bottom: 20px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+        }
+
+        h1 {
+            color: #333;
+            margin-bottom: 10px;
+        }
+
+        .subtitle {
+            color: #666;
+        }
+
+        .tabs {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+
+        .tab {
+            background: white;
+            border: none;
+            padding: 15px 30px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: 500;
+            transition: all 0.3s;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+
+        .tab:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 12px rgba(0,0,0,0.15);
+        }
+
+        .tab.active {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .content {
+            display: none;
+            background: white;
+            border-radius: 12px;
+            padding: 30px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+        }
+
+        .content.active {
+            display: block;
+            animation: fadeIn 0.3s;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: #333;
+        }
+
+        input, textarea, select {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 14px;
+            transition: border-color 0.3s;
+        }
+
+        input:focus, textarea:focus, select:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        textarea {
+            min-height: 100px;
+            resize: vertical;
+        }
+
+        .btn {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            margin-right: 10px;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 12px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn-secondary {
+            background: #6c757d;
+            color: white;
+        }
+
+        .btn-danger {
+            background: #dc3545;
+            color: white;
+        }
+
+        .btn-success {
+            background: #28a745;
+            color: white;
+        }
+
+        .monitor-list, .item-grid {
+            display: grid;
+            gap: 20px;
+            margin-top: 20px;
+        }
+
+        .monitor-card {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 8px;
+            border-left: 4px solid #667eea;
+        }
+
+        .monitor-card h3 {
+            margin-bottom: 10px;
+            color: #333;
+        }
+
+        .monitor-card .info {
+            color: #666;
+            font-size: 14px;
+            margin-bottom: 5px;
+        }
+
+        .monitor-card .keywords {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-top: 10px;
+        }
+
+        .keyword-tag {
+            background: #667eea;
+            color: white;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+        }
+
+        .item-grid {
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+        }
+
+        .item-card {
+            background: white;
+            border: 2px solid #e0e0e0;
+            border-radius: 12px;
+            overflow: hidden;
+            transition: all 0.3s;
+        }
+
+        .item-card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 8px 16px rgba(0,0,0,0.1);
+            border-color: #667eea;
+        }
+
+        .item-image {
+            width: 100%;
+            height: 200px;
+            object-fit: cover;
+            background: #f0f0f0;
+        }
+
+        .item-content {
+            padding: 20px;
+        }
+
+        .item-title {
+            font-weight: 600;
+            margin-bottom: 10px;
+            color: #333;
+            font-size: 16px;
+        }
+
+        .item-price {
+            font-size: 24px;
+            font-weight: 700;
+            color: #28a745;
+            margin-bottom: 10px;
+        }
+
+        .item-info {
+            font-size: 13px;
+            color: #666;
+            margin-bottom: 5px;
+        }
+
+        .item-actions {
+            display: flex;
+            gap: 10px;
+            margin-top: 15px;
+        }
+
+        .search-box {
+            margin-bottom: 20px;
+        }
+
+        .search-box input {
+            width: 100%;
+            padding: 15px;
+            font-size: 16px;
+        }
+
+        .status-badge {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+
+        .status-active {
+            background: #d4edda;
+            color: #155724;
+        }
+
+        .status-inactive {
+            background: #f8d7da;
+            color: #721c24;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #666;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: #999;
+        }
+
+        .empty-state h3 {
+            margin-bottom: 10px;
+        }
+
+        .test-results {
+            margin-top: 20px;
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            border: 2px solid #667eea;
+        }
+
+        .test-results h3 {
+            color: #333;
+            margin-bottom: 15px;
+        }
+
+        .test-stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+
+        .test-stat {
+            background: white;
+            padding: 15px;
+            border-radius: 8px;
+            text-align: center;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .test-stat-value {
+            font-size: 32px;
+            font-weight: bold;
+            color: #667eea;
+            margin-bottom: 5px;
+        }
+
+        .test-stat-label {
+            font-size: 12px;
+            color: #666;
+            text-transform: uppercase;
+        }
+
+        .test-preview {
+            max-height: 400px;
+            overflow-y: auto;
+        }
+
+        .test-preview-item {
+            background: white;
+            padding: 15px;
+            margin-bottom: 10px;
+            border-radius: 8px;
+            border-left: 4px solid #667eea;
+            display: flex;
+            gap: 15px;
+        }
+
+        .test-preview-image {
+            width: 80px;
+            height: 80px;
+            object-fit: cover;
+            border-radius: 6px;
+            background: #f0f0f0;
+            flex-shrink: 0;
+        }
+
+        .test-preview-content {
+            flex: 1;
+        }
+
+        .test-preview-title {
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 5px;
+            font-size: 14px;
+        }
+
+        .test-preview-price {
+            font-size: 18px;
+            font-weight: bold;
+            color: #28a745;
+            margin-bottom: 5px;
+        }
+
+        .test-preview-info {
+            font-size: 11px;
+            color: #666;
+            margin-bottom: 3px;
+        }
+
+        .btn-test {
+            background: #17a2b8;
+            color: white;
+        }
+
+        .btn-test:hover {
+            background: #138496;
+            transform: translateY(-2px);
+            box-shadow: 0 6px 12px rgba(23, 162, 184, 0.4);
+        }
+
+        .loading-test {
+            text-align: center;
+            padding: 20px;
+            color: #17a2b8;
+        }
+
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.5);
+            animation: fadeIn 0.3s;
+        }
+
+        .modal.active {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .modal-content {
+            background: white;
+            padding: 30px;
+            border-radius: 12px;
+            max-width: 600px;
+            width: 90%;
+            max-height: 90vh;
+            overflow-y: auto;
+        }
+
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+
+        .close {
+            font-size: 28px;
+            font-weight: bold;
+            cursor: pointer;
+            color: #999;
+        }
+
+        .close:hover {
+            color: #333;
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+    <header>
+        <h1>🔍 Monitor de Leilões Superbid</h1>
+        <p class="subtitle">Sistema automatizado de monitoramento de leilões online</p>
+    </header>
+
+    <div class="tabs">
+        <button class="tab active" onclick="showTab('items')">📋 Anúncios</button>
+        <button class="tab" onclick="showTab('archived')">📦 Arquivados</button>
+        <button class="tab" onclick="showTab('monitors')">⚙️ Monitoramentos</button>
+        <button class="tab" onclick="showTab('telegram')">📱 Telegram</button>
+    </div>
+
+    <!-- Tab: Items -->
+    <div id="items" class="content active">
+        <div class="search-box">
+            <input type="text" id="searchInput" placeholder="🔍 Buscar anúncios..." onkeyup="searchItems()">
+        </div>
+        <div id="itemsList" class="item-grid">
+            <div class="loading">Carregando anúncios...</div>
+        </div>
+    </div>
+
+    <!-- Tab: Archived -->
+    <div id="archived" class="content">
+        <h2 style="margin-bottom: 20px;">Anúncios Arquivados</h2>
+        <div id="archivedList" class="item-grid">
+            <div class="loading">Carregando...</div>
+        </div>
+    </div>
+
+    <!-- Tab: Monitors -->
+    <div id="monitors" class="content">
+        <button class="btn btn-primary" onclick="openMonitorModal()">➕ Novo Monitoramento</button>
+        <div id="monitorsList" class="monitor-list">
+            <div class="loading">Carregando monitoramentos...</div>
+        </div>
+    </div>
+
+    <!-- Tab: Telegram -->
+    <div id="telegram" class="content">
+        <h2 style="margin-bottom: 20px;">Configuração do Telegram</h2>
+        <form id="telegramForm" onsubmit="saveTelegramConfig(event)">
+            <div class="form-group">
+                <label>Bot Token</label>
+                <input type="text" id="botToken" required>
+                <small style="color: #666;">Obtenha o token com o @BotFather no Telegram</small>
+            </div>
+            <div class="form-group">
+                <label>Chat ID</label>
+                <input type="text" id="chatId" required>
+                <small style="color: #666;">ID do grupo ou chat para receber notificações</small>
+            </div>
+            <div class="form-group">
+                <label>
+                    <input type="checkbox" id="notifyNewItems" checked> Notificar novos itens
+                </label>
+            </div>
+            <div class="form-group">
+                <label>
+                    <input type="checkbox" id="notifyPriceChanges" checked> Notificar mudanças de preço
+                </label>
+            </div>
+            <button type="submit" class="btn btn-primary">💾 Salvar Configuração</button>
+        </form>
+    </div>
+</div>
+
+<!-- Modal: Monitor Form -->
+<div id="monitorModal" class="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h2 id="modalTitle">Novo Monitoramento</h2>
+            <span class="close" onclick="closeMonitorModal()">&times;</span>
+        </div>
+        <form id="monitorForm" onsubmit="saveMonitor(event)">
+            <input type="hidden" id="monitorId">
+            <div class="form-group">
+                <label>Nome do Monitoramento</label>
+                <input type="text" id="monitorName" required>
+            </div>
+            <div class="form-group">
+                <label>URL da API</label>
+                <textarea id="monitorUrl" required></textarea>
+                <small style="color: #666;">Cole a URL completa da API Superbid</small>
+            </div>
+            <div class="form-group">
+                <label>Palavras-chave</label>
+                <textarea id="monitorKeywords" placeholder="storage + disco + hd&#10;tb ~ terabyte&#10;dell"></textarea>
+                <small style="color: #666;">
+                    <strong>Uma por linha.</strong><br>
+                    • Use <code>+</code> para AND (ex: <code>storage + raid</code> = storage E raid)<br>
+                    • Use <code>~</code> para OR (ex: <code>tb ~ terabyte</code> = tb OU terabyte)<br>
+                    • Múltiplas linhas = OR entre elas<br>
+                    • Deixe vazio para monitorar todos os itens
+                </small>
+            </div>
+            <div class="form-group">
+                <label>Intervalo de Verificação (minutos)</label>
+                <input type="number" id="monitorInterval" min="1" value="15" required>
+            </div>
+            <div class="form-group">
+                <label>
+                    <input type="checkbox" id="monitorActive" checked> Ativo
+                </label>
+            </div>
+            <button type="submit" class="btn btn-primary">💾 Salvar</button>
+            <button type="button" class="btn btn-test" id="btnTestMonitor">🔍 Testar Filtros</button>
+            <button type="button" class="btn btn-secondary" onclick="closeMonitorModal()">Cancelar</button>
+        </form>
+
+        <div id="testResults" style="display: none;"></div>
+    </div>
+</div>
+
+<script>
+    const API_BASE = 'http://localhost:8080/api';
+
+    // Debug: Verificar se as funções estão disponíveis
+    console.log('Script carregado!');
+    console.log('testMonitor disponível:', typeof testMonitor);
+
+    // Tab Management
+    function showTab(tabName) {
+        document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+        document.querySelectorAll('.content').forEach(c => c.classList.remove('active'));
+
+        event.target.classList.add('active');
+        document.getElementById(tabName).classList.add('active');
+
+        if (tabName === 'items') loadItems(false);
+        else if (tabName === 'archived') loadItems(true);
+        else if (tabName === 'monitors') loadMonitors();
+        else if (tabName === 'telegram') loadTelegramConfig();
+    }
+
+    // Items
+    async function loadItems(archived = false) {
+        const container = archived ? document.getElementById('archivedList') : document.getElementById('itemsList');
+        container.innerHTML = '<div class="loading">Carregando...</div>';
+
+        try {
+            const response = await fetch(`${API_BASE}/items?archived=${archived}`);
+            const items = await response.json();
+
+            if (items.length === 0) {
+                container.innerHTML = '<div class="empty-state"><h3>📭</h3><p>Nenhum anúncio encontrado</p></div>';
+                return;
+            }
+
+            container.innerHTML = items.map(item => `
+                    <div class="item-card">
+                        ${item.imageUrl ? `<img src="${item.imageUrl}" class="item-image" alt="${item.title}">` : '<div class="item-image"></div>'}
+                        <div class="item-content">
+                            <div class="item-title">${item.title}</div>
+                            <div class="item-price">R$ ${item.currentPrice.toFixed(2)}</div>
+                            ${item.lotNumber ? `<div class="item-info">🎯 Lote: ${item.lotNumber}</div>` : ''}
+                            ${item.categoryName ? `<div class="item-info">🏷️ ${item.categoryName}${item.subCategoryName ? ' > ' + item.subCategoryName : ''}</div>` : ''}
+                            ${item.location ? `<div class="item-info">📍 ${item.location}</div>` : ''}
+                            ${item.seller ? `<div class="item-info">🏢 ${item.seller}</div>` : ''}
+                            ${item.auctionName ? `<div class="item-info">📋 ${item.auctionName}</div>` : ''}
+                            ${item.endDate ? `<div class="item-info">⏰ ${item.endDate}</div>` : ''}
+                            ${item.visits ? `<div class="item-info">👁️ ${item.visits} visitas</div>` : ''}
+                            <div class="item-actions">
+                                <button class="btn btn-primary" onclick="window.open('${item.auctionUrl}', '_blank')">Ver Leilão</button>
+                                <button class="btn ${archived ? 'btn-success' : 'btn-secondary'}"
+                                    onclick="archiveItem(${item.id}, ${!archived})">
+                                    ${archived ? '↩️ Restaurar' : '📦 Arquivar'}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                `).join('');
+        } catch (error) {
+            container.innerHTML = '<div class="empty-state"><h3>❌</h3><p>Erro ao carregar anúncios</p></div>';
+            console.error('Erro:', error);
+        }
+    }
+
+    async function archiveItem(id, archived) {
+        try {
+            await fetch(`${API_BASE}/items/${id}/archive`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ archived })
+            });
+            loadItems(!archived);
+        } catch (error) {
+            alert('Erro ao arquivar item');
+            console.error('Erro:', error);
+        }
+    }
+
+    function searchItems() {
+        const query = document.getElementById('searchInput').value;
+        if (query.length < 2) {
+            loadItems(false);
+            return;
+        }
+
+        fetch(`${API_BASE}/items/search?q=${encodeURIComponent(query)}`)
+            .then(r => r.json())
+            .then(items => {
+                const container = document.getElementById('itemsList');
+                if (items.length === 0) {
+                    container.innerHTML = '<div class="empty-state"><h3>🔍</h3><p>Nenhum resultado encontrado</p></div>';
+                    return;
+                }
+
+                container.innerHTML = items.map(item => `
+                        <div class="item-card">
+                            ${item.imageUrl ? `<img src="${item.imageUrl}" class="item-image">` : '<div class="item-image"></div>'}
+                            <div class="item-content">
+                                <div class="item-title">${item.title}</div>
+                                <div class="item-price">R$ ${item.currentPrice.toFixed(2)}</div>
+                                ${item.lotNumber ? `<div class="item-info">🎯 Lote: ${item.lotNumber}</div>` : ''}
+                                ${item.categoryName ? `<div class="item-info">🏷️ ${item.categoryName}</div>` : ''}
+                                ${item.location ? `<div class="item-info">📍 ${item.location}</div>` : ''}
+                                <div class="item-actions">
+                                    <button class="btn btn-primary" onclick="window.open('${item.auctionUrl}', '_blank')">Ver</button>
+                                </div>
+                            </div>
+                        </div>
+                    `).join('');
+            });
+    }
+
+    // Monitors
+    async function loadMonitors() {
+        const container = document.getElementById('monitorsList');
+        container.innerHTML = '<div class="loading">Carregando...</div>';
+
+        try {
+            const response = await fetch(`${API_BASE}/monitors`);
+            const monitors = await response.json();
+
+            if (monitors.length === 0) {
+                container.innerHTML = '<div class="empty-state"><h3>⚙️</h3><p>Nenhum monitoramento configurado</p></div>';
+                return;
+            }
+
+            container.innerHTML = monitors.map(m => `
+                    <div class="monitor-card">
+                        <h3>${m.name} <span class="status-badge ${m.active ? 'status-active' : 'status-inactive'}">${m.active ? 'Ativo' : 'Inativo'}</span></h3>
+                        <div class="info">⏱️ Intervalo: ${m.intervalMinutes} minutos</div>
+                        <div class="info">🔗 URL: ${m.url.substring(0, 60)}...</div>
+                        <div class="keywords">
+                            ${m.keywords.map(k => `<span class="keyword-tag">${k}</span>`).join('')}
+                        </div>
+                        <div style="margin-top: 15px;">
+                            <button class="btn btn-primary" onclick="runMonitor(${m.id})">▶️ Executar Agora</button>
+                            <button class="btn btn-secondary" onclick="editMonitor(${m.id})">✏️ Editar</button>
+                            <button class="btn btn-danger" onclick="deleteMonitor(${m.id})">🗑️ Excluir</button>
+                        </div>
+                    </div>
+                `).join('');
+        } catch (error) {
+            container.innerHTML = '<div class="empty-state"><h3>❌</h3><p>Erro ao carregar monitoramentos</p></div>';
+        }
+    }
+
+    function openMonitorModal(monitor = null) {
+        document.getElementById('monitorModal').classList.add('active');
+        document.getElementById('modalTitle').textContent = monitor ? 'Editar Monitoramento' : 'Novo Monitoramento';
+
+        if (monitor) {
+            document.getElementById('monitorId').value = monitor.id;
+            document.getElementById('monitorName').value = monitor.name;
+            document.getElementById('monitorUrl').value = monitor.url;
+            document.getElementById('monitorKeywords').value = monitor.keywords.join('\n');
+            document.getElementById('monitorInterval').value = monitor.intervalMinutes;
+            document.getElementById('monitorActive').checked = monitor.active;
+        } else {
+            document.getElementById('monitorForm').reset();
+            document.getElementById('monitorId').value = '';
+        }
+    }
+
+    function closeMonitorModal() {
+        document.getElementById('monitorModal').classList.remove('active');
+    }
+
+    async function saveMonitor(e) {
+        e.preventDefault();
+
+        const id = document.getElementById('monitorId').value;
+        const monitor = {
+            name: document.getElementById('monitorName').value,
+            url: document.getElementById('monitorUrl').value,
+            keywords: document.getElementById('monitorKeywords').value.split('\n').filter(k => k.trim()),
+            intervalMinutes: parseInt(document.getElementById('monitorInterval').value),
+            active: document.getElementById('monitorActive').checked
+        };
+
+        try {
+            const url = id ? `${API_BASE}/monitors/${id}` : `${API_BASE}/monitors`;
+            const method = id ? 'PUT' : 'POST';
+
+            await fetch(url, {
+                method,
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(monitor)
+            });
+
+            closeMonitorModal();
+            loadMonitors();
+        } catch (error) {
+            alert('Erro ao salvar monitoramento');
+            console.error('Erro:', error);
+        }
+    }
+
+    async function editMonitor(id) {
+        try {
+            const response = await fetch(`${API_BASE}/monitors/${id}`);
+            const monitor = await response.json();
+            openMonitorModal(monitor);
+        } catch (error) {
+            alert('Erro ao carregar monitoramento');
+        }
+    }
+
+    async function deleteMonitor(id) {
+        if (!confirm('Tem certeza que deseja excluir este monitoramento?')) return;
+
+        try {
+            await fetch(`${API_BASE}/monitors/${id}`, { method: 'DELETE' });
+            loadMonitors();
+        } catch (error) {
+            alert('Erro ao excluir monitoramento');
+        }
+    }
+
+    async function runMonitor(id) {
+        try {
+            await fetch(`${API_BASE}/monitors/${id}/run`, { method: 'POST' });
+            alert('Monitoramento executado! Aguarde alguns instantes.');
+        } catch (error) {
+            alert('Erro ao executar monitoramento');
+        }
+    }
+
+    // Telegram
+    async function loadTelegramConfig() {
+        try {
+            const response = await fetch(`${API_BASE}/telegram`);
+            if (response.ok) {
+                const config = await response.json();
+                document.getElementById('botToken').value = config.botToken;
+                document.getElementById('chatId').value = config.chatId;
+                document.getElementById('notifyNewItems').checked = config.notifyNewItems;
+                document.getElementById('notifyPriceChanges').checked = config.notifyPriceChanges;
+            }
+        } catch (error) {
+            console.log('Nenhuma configuração encontrada');
+        }
+    }
+
+    async function saveTelegramConfig(e) {
+        e.preventDefault();
+
+        const config = {
+            botToken: document.getElementById('botToken').value,
+            chatId: document.getElementById('chatId').value,
+            notifyNewItems: document.getElementById('notifyNewItems').checked,
+            notifyPriceChanges: document.getElementById('notifyPriceChanges').checked
+        };
+
+        try {
+            await fetch(`${API_BASE}/telegram`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(config)
+            });
+            alert('Configuração salva com sucesso!');
+        } catch (error) {
+            alert('Erro ao salvar configuração');
+        }
+    }
+
+    // Load initial data
+    document.addEventListener('DOMContentLoaded', function() {
+        console.log('Inicializando aplicação...');
+        loadItems(false);
+    });
+</script>
+</body>
+</html>

@@ -1,0 +1,11 @@
+node_modules/
+dist/
+data/
+artifacts/
+.codex/
+.agents/
+.env
+*.log
+*.dump
+*.tgz
+migration-backup*/

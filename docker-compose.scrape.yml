@@ -1,0 +1,50 @@
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: auction_monitor
+      POSTGRES_USER: auction
+      POSTGRES_PASSWORD: auction
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U auction -d auction_monitor"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+  minio:
+    image: minio/minio:latest
+    command: server /data
+    environment:
+      MINIO_ROOT_USER: auctionadmin
+      MINIO_ROOT_PASSWORD: auctionsecret
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+  scrape:
+    build:
+      context: .
+      target: deps
+    environment:
+      EXAMPLE_SCRAPER_HOSTS: example.com,site.com.br,vipleiloes.com.br
+      POSTGRES_URL: postgresql://auction:auction@postgres:5432/auction_monitor
+      MINIO_ENDPOINT: minio
+      MINIO_PORT: 9000
+      MINIO_ACCESS_KEY: auctionadmin
+      MINIO_SECRET_KEY: auctionsecret
+      MINIO_BUCKET: auction-media
+    depends_on:
+      postgres:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    working_dir: /app
+    command: ["npm", "run", "scrape", "--"]
+    volumes:
+      - .:/app
+      - scrape-node-modules:/app/node_modules
+
+volumes:
+  scrape-node-modules:

@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Auction Data</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <header class="site-header">
+    <div class="header-main">
+      <a class="brand" href="/" aria-label="Auction Data">
+        <span class="brand-symbol" aria-hidden="true"><i></i><b></b></span>
+        <span><strong>Auction</strong><small>data</small></span>
+      </a>
+      <label class="global-search">
+        <span class="search-icon" aria-hidden="true"></span>
+        <input id="search-input" type="search" placeholder="Busque por veículo, marca, comitente ou código" autocomplete="off">
+        <button id="search-clear" type="button" aria-label="Limpar busca" hidden>&times;</button>
+      </label>
+      <div class="header-actions">
+        <span id="last-updated">Aguardando dados</span>
+        <button id="collect-button" class="accent-button" type="button">Atualizar coleta</button>
+      </div>
+    </div>
+    <nav id="source-nav" class="source-nav" aria-label="Origem dos lotes">
+      <button class="source-tab active" type="button" data-source="">Todos os sites</button>
+    </nav>
+  </header>
+
+  <section id="collection-strip" class="collection-strip" hidden>
+    <div><strong id="collection-title">Coleta em andamento</strong><span id="collection-detail"></span></div>
+    <div class="progress-track"><span id="collection-progress"></span></div>
+  </section>
+
+  <main id="catalog">
+    <section class="summary-band" aria-label="Resumo da base">
+      <div><span>Lotes monitorados</span><strong id="stat-total">0</strong></div>
+      <div><span>Eventos</span><strong id="stat-events">0</strong></div>
+      <div><span>Em aberto</span><strong id="stat-active">0</strong></div>
+      <div><span>Com resultado</span><strong id="stat-results">0</strong></div>
+      <div><span>Lance médio</span><strong id="stat-average">R$ 0</strong></div>
+      <div><span>Imagens</span><strong id="stat-media">0</strong></div>
+    </section>
+
+    <section class="catalog-heading">
+      <div><span class="eyebrow">Catálogo consolidado</span><h1>Veículos de leilão</h1></div>
+      <button id="mobile-filter-button" class="outline-button mobile-only" type="button">Filtros <span id="mobile-filter-count">0</span></button>
+    </section>
+
+    <div id="active-filters" class="active-filters" hidden></div>
+
+    <div class="catalog-layout">
+      <aside id="filter-panel" class="filter-panel" aria-label="Filtros de veículos">
+        <div class="filter-panel-head"><div><span>Busca refinada</span><strong>Filtros</strong></div><button id="close-filters" class="icon-button mobile-only" type="button" aria-label="Fechar filtros">&times;</button></div>
+        <div id="facet-list"></div>
+        <button id="clear-filters" class="clear-button" type="button">Limpar todos os filtros</button>
+      </aside>
+
+      <section class="results-panel">
+        <div class="results-toolbar">
+          <div><strong id="result-count">0 veículos</strong><span id="page-label"></span></div>
+          <div class="results-actions">
+            <label class="sort-control"><span>Ordenar por</span><select id="sort-select">
+              <option value="auction_desc">Data do leilão: mais recente</option>
+              <option value="auction_asc">Data do leilão: mais antiga</option>
+              <option value="year_desc">Ano: mais novo</option>
+              <option value="year_asc">Ano: mais antigo</option>
+              <option value="brand_asc">Marca: A–Z</option>
+              <option value="brand_desc">Marca: Z–A</option>
+            </select></label>
+            <label class="page-size-control"><span>Itens por página</span><select id="page-size-select">
+              <option value="24">24</option>
+              <option value="48">48</option>
+              <option value="72">72</option>
+              <option value="100">100</option>
+            </select></label>
+            <div class="view-switch" role="group" aria-label="Modo de visualização">
+              <button id="grid-view" class="active" type="button">Grade</button>
+              <button id="list-view" type="button">Lista</button>
+            </div>
+          </div>
+        </div>
+        <div id="lot-list" class="lot-results grid-view" aria-live="polite"></div>
+        <div id="empty-state" class="empty-state" hidden>Nenhum veículo encontrado com estes filtros.</div>
+        <nav class="pagination" aria-label="Paginação">
+          <button id="previous-page" class="outline-button" type="button">Anterior</button>
+          <span id="pagination-label">Página 1</span>
+          <button id="next-page" class="outline-button" type="button">Próxima</button>
+        </nav>
+      </section>
+    </div>
+  </main>
+
+  <div id="filter-backdrop" class="filter-backdrop" hidden></div>
+
+  <dialog id="lot-dialog" class="lot-dialog">
+    <button id="close-dialog" class="close-button" type="button" aria-label="Fechar">&times;</button>
+    <div id="lot-detail"></div>
+  </dialog>
+
+  <dialog id="image-viewer" class="image-viewer" aria-label="Visualizador de imagens">
+    <header class="viewer-toolbar">
+      <div><strong id="viewer-title">Imagem do lote</strong><span id="viewer-counter">1 / 1</span></div>
+      <div class="viewer-tools" role="group" aria-label="Ferramentas da imagem">
+        <button id="viewer-zoom-out" type="button" title="Reduzir zoom (-)" aria-label="Reduzir zoom">−</button>
+        <button id="viewer-zoom-reset" type="button" title="Restaurar zoom" aria-label="Restaurar zoom"><span id="viewer-zoom-level">100%</span></button>
+        <button id="viewer-zoom-in" type="button" title="Aumentar zoom (+)" aria-label="Aumentar zoom">+</button>
+        <button id="viewer-rotate-left" type="button" title="Girar para a esquerda" aria-label="Girar para a esquerda">↶</button>
+        <button id="viewer-rotate-right" type="button" title="Girar para a direita (R)" aria-label="Girar para a direita">↷</button>
+        <button id="viewer-fullscreen" type="button" title="Tela cheia" aria-label="Alternar tela cheia">⛶</button>
+      </div>
+      <button id="viewer-close" class="viewer-close" type="button" title="Fechar (Esc)" aria-label="Fechar visualizador">&times;</button>
+    </header>
+    <button id="viewer-previous" class="viewer-navigation previous" type="button" title="Imagem anterior (seta esquerda)" aria-label="Imagem anterior">‹</button>
+    <div id="viewer-stage" class="viewer-stage">
+      <img id="viewer-image" alt="">
+    </div>
+    <button id="viewer-next" class="viewer-navigation next" type="button" title="Próxima imagem (seta direita)" aria-label="Próxima imagem">›</button>
+    <div id="viewer-thumbnails" class="viewer-thumbnails" aria-label="Miniaturas das imagens"></div>
+  </dialog>
+
+  <script src="/app.js" defer></script>
+</body>
+</html>

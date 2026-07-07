@@ -1,0 +1,98 @@
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: auction_monitor
+      POSTGRES_USER: auction
+      POSTGRES_PASSWORD: auction
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U auction -d auction_monitor"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    restart: unless-stopped
+
+  minio:
+    image: minio/minio:latest
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: auctionadmin
+      MINIO_ROOT_PASSWORD: auctionsecret
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - minio-data:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    restart: unless-stopped
+
+  dashboard:
+    build: .
+    command: ["node", "dist/leiloApp.js"]
+    environment:
+      POSTGRES_URL: postgresql://auction:auction@postgres:5432/auction_monitor
+      MINIO_ENDPOINT: minio
+      MINIO_PORT: 9000
+      MINIO_ACCESS_KEY: auctionadmin
+      MINIO_SECRET_KEY: auctionsecret
+      MINIO_BUCKET: auction-media
+      MINIO_USE_SSL: "false"
+      MEDIA_DOWNLOAD_CONCURRENCY: 6
+      MEDIA_IMAGE_MAX_WIDTH: 1280
+      MEDIA_IMAGE_MAX_HEIGHT: 960
+      MEDIA_IMAGE_QUALITY: 70
+      DASHBOARD_PORT: 3000
+      LEILO_API_URL: https://api.leilo.com.br/v1/lote/busca-elastic
+      LEILO_MAX_PAGES: 20
+      CATALOG_COLLECTION_CRON: "0 */6 * * *"
+      CATALOG_COLLECT_ON_START: "false"
+      CATALOG_MAX_PAGES: 60
+      VIP_REQUEST_INTERVAL_MS: 750
+    ports:
+      - "3000:3000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    restart: unless-stopped
+
+  collector:
+    build: .
+    profiles: ["multi-site"]
+    command: ["node", "dist/collector.js"]
+    env_file:
+      - .env
+    environment:
+      POSTGRES_URL: postgresql://auction:auction@postgres:5432/auction_monitor
+      MINIO_ENDPOINT: minio
+    depends_on:
+      postgres:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    restart: unless-stopped
+
+  auction-monitor:
+    build: .
+    profiles: ["telegram"]
+    env_file:
+      - .env
+    environment:
+      POSTGRES_URL: postgresql://auction:auction@postgres:5432/auction_monitor
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  postgres-data:
+  minio-data:

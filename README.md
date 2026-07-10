@@ -26,10 +26,13 @@ Preencha `TELEGRAM_BOT_TOKEN` no `.env`. Para restringir o uso, informe IDs em `
 
 Enviar apenas uma URL tambem aciona o fluxo de `/add`.
 
-## Docker
+## Docker local
+
+No Windows, use o override local para manter os dados em volumes Docker, construir
+a imagem a partir do codigo atual e desabilitar o atualizador de producao:
 
 ```bash
-docker compose up --build
+docker compose -f docker-compose.yml -f docker-compose.local.yml up -d --build
 ```
 
 Esse comando inicia o coletor da Leilo, PostgreSQL, MinIO e o painel em `http://localhost:3000`.
@@ -37,6 +40,35 @@ Os dados ficam nos volumes `postgres-data` e `minio-data`. O console do MinIO fi
 `http://localhost:9001` (usuario `auctionadmin`, senha `auctionsecret` no ambiente local).
 
 O painel inicia uma coleta automaticamente e permite disparar novas coletas pelo botao `Atualizar coleta`.
+
+## Deploy automatico no Portainer Community
+
+O workflow `.github/workflows/publish-image.yml` executa a cada push na branch `main`.
+Ele publica `ghcr.io/namewellz/auction-monitor:latest` e uma tag imutavel com o SHA do
+commit. A imagem e multi-arquitetura (`linux/amd64` e `linux/arm64`), atendendo tanto o
+ambiente local quanto a VM ARM da Oracle Cloud.
+
+O servico Watchtower consulta o registry a cada cinco minutos e atualiza somente os
+containers que possuem a label `com.centurylinklabs.watchtower.enable=true`. PostgreSQL,
+MinIO e o proprio Watchtower nao recebem essa label e nao sao atualizados automaticamente.
+Imagens antigas da aplicacao sao removidas depois de um update bem-sucedido.
+
+Configuracao inicial:
+
+1. Faca o primeiro push para a branch `main` e aguarde o workflow publicar a imagem.
+2. Em **Packages**, abra `auction-monitor`, entre em **Package settings** e altere a
+   visibilidade para publica.
+3. Atualize manualmente uma vez a stack no Portainer usando este `docker-compose.yml`.
+4. Confirme nos logs do servico `watchtower` que o container foi iniciado e encontrou o
+   `dashboard` na lista de containers monitorados.
+
+Depois desse bootstrap, alteracoes de codigo publicadas em `:latest` sao instaladas sem
+intervencao no Portainer. Mudancas no proprio `docker-compose.yml` (portas, volumes,
+variaveis ou novos servicos) ainda exigem atualizar manualmente a stack no Portainer.
+
+O `GITHUB_TOKEN` usado para publicar a imagem e fornecido automaticamente pelo Actions;
+nao e necessario cadastrar secrets de deploy. Para publicar manualmente, abra
+**Actions > Publish Docker image > Run workflow**.
 
 Para iniciar tambem o bot Telegram:
 

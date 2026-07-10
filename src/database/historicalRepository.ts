@@ -45,6 +45,11 @@ export interface StoredMedia {
   contentType?: string;
 }
 
+export interface SaveObservationResult {
+  id: number;
+  outcome: 'new' | 'updated' | 'unchanged';
+}
+
 interface PreviousLotState {
   current_bid: string | null;
   current_bidder_alias: string | null;
@@ -67,7 +72,7 @@ export class HistoricalRepository {
     url: string,
     data: LotData,
     scheduling: { nextCheckAt: Date; finalizedAt?: Date },
-  ): Promise<number> {
+  ): Promise<SaveObservationResult> {
     const client = await this.pool.connect();
     try {
       await client.query('BEGIN');
@@ -129,12 +134,15 @@ export class HistoricalRepository {
         values,
       );
       const marketLotId = Number(result.rows[0]?.id);
-      await this.insertSnapshot(client, marketLotId, data, now, snapshotHash, rawDataJson);
+      const snapshotInserted = await this.insertSnapshot(client, marketLotId, data, now, snapshotHash, rawDataJson);
       await this.insertChangeLog(client, marketLotId, previous, data, now, snapshotHash);
       await this.upsertMedia(client, marketLotId, data, now);
       await this.upsertBidHistory(client, marketLotId, data);
       await client.query('COMMIT');
-      return marketLotId;
+      return {
+        id: marketLotId,
+        outcome: !previous ? 'new' : snapshotInserted ? 'updated' : 'unchanged',
+      };
     } catch (error) {
       await client.query('ROLLBACK');
       throw error;
@@ -210,23 +218,24 @@ export class HistoricalRepository {
     );
   }
 
-  public async startRun(sourceId?: number): Promise<number> {
+  public async startRun(sourceId?: number, site?: string): Promise<number> {
     const result = await this.pool.query<{ id: string }>(
-      `INSERT INTO collection_runs (source_id,started_at,status) VALUES ($1,NOW(),'running') RETURNING id`,
-      [sourceId ?? null],
+      `INSERT INTO collection_runs (source_id,site,started_at,status) VALUES ($1,$2,NOW(),'running') RETURNING id`,
+      [sourceId ?? null, site ?? null],
     );
     return Number(result.rows[0]?.id);
   }
 
   public async finishRun(
     runId: number,
-    result: { discovered: number; collected: number; failed: number },
+    result: { discovered: number; collected: number; failed: number; new: number; updated: number; unchanged: number },
     error?: string,
   ): Promise<void> {
     await this.pool.query(
       `UPDATE collection_runs SET finished_at=NOW(),status=$1,discovered_count=$2,
-       collected_count=$3,failed_count=$4,error=$5 WHERE id=$6`,
-      [error ? 'failed' : 'completed', result.discovered, result.collected, result.failed, error ?? null, runId],
+       collected_count=$3,failed_count=$4,new_count=$5,updated_count=$6,unchanged_count=$7,error=$8 WHERE id=$9`,
+      [error ? 'failed' : 'completed', result.discovered, result.collected, result.failed,
+        result.new, result.updated, result.unchanged, error ?? null, runId],
     );
   }
 
@@ -347,8 +356,8 @@ export class HistoricalRepository {
     observedAt: Date,
     hash: string,
     rawDataJson: string,
-  ): Promise<void> {
-    await client.query(
+  ): Promise<boolean> {
+    const result = await client.query(
       `INSERT INTO lot_snapshots (market_lot_id,observed_at,current_bid,bidder_alias,next_bid,final_bid,sale_status,
        commission_fee,buyer_fee,other_fees,total_cost,auction_end,data_hash,raw_data_json)
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14::jsonb)
@@ -358,6 +367,7 @@ export class HistoricalRepository {
         data.commissionFee ?? null, data.buyerFee ?? null, data.otherFees ?? null, data.totalCost ?? null,
         data.auctionEnd, hash, rawDataJson],
     );
+    return (result.rowCount ?? 0) > 0;
   }
 
   private async insertChangeLog(

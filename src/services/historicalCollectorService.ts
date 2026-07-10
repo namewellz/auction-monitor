@@ -18,9 +18,10 @@ export class HistoricalCollectorService {
     const scraper = this.scraperFactory.forUrl(url);
     const data = await scraper.scrape(url);
     const schedule = scheduleNextCheck(data, recheckCount);
-    const id = await this.repository.saveObservation(scraper.site, url, data, schedule);
-    this.logger.info('Historical lot collected', { id, site: scraper.site, url, nextCheckAt: schedule.nextCheckAt });
-    return id;
+    const observation = await this.repository.saveObservation(scraper.site, url, data, schedule);
+    this.logger.info('Historical lot collected', { id: observation.id, outcome: observation.outcome,
+      site: scraper.site, url, nextCheckAt: schedule.nextCheckAt });
+    return observation.id;
   }
 
   public async collectDueLots(limit: number): Promise<CollectionRunResult> {
@@ -33,7 +34,7 @@ export class HistoricalCollectorService {
   }
 
   public async scanSource(source: CollectionSource): Promise<CollectionRunResult> {
-    const runId = await this.repository.startRun(source.id);
+    const runId = await this.repository.startRun(source.id, source.site);
     try {
       const urls = await this.discovery.discoverLotUrls(source.site, source.url, {
         maxPages: this.options.maxDiscoveryPages,
@@ -46,7 +47,7 @@ export class HistoricalCollectorService {
       return result;
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      const result = { discovered: 0, collected: 0, failed: 1 };
+      const result = { discovered: 0, collected: 0, failed: 1, new: 0, updated: 0, unchanged: 0 };
       await this.repository.postponeFailedSource(source);
       await this.repository.finishRun(runId, result, message);
       throw error;
@@ -56,6 +57,9 @@ export class HistoricalCollectorService {
   private async collectUrls(items: Array<{ url: string; recheckCount: number }>): Promise<CollectionRunResult> {
     let collected = 0;
     let failed = 0;
+    let newCount = 0;
+    let updated = 0;
+    let unchanged = 0;
     let cursor = 0;
 
     const workers = Array.from({ length: Math.max(1, this.options.concurrency) }, async () => {
@@ -63,8 +67,15 @@ export class HistoricalCollectorService {
         const item = items[cursor++];
         if (!item) continue;
         try {
-          await this.collectUrl(item.url, item.recheckCount);
+          const scraper = this.scraperFactory.forUrl(item.url);
+          const data = await scraper.scrape(item.url);
+          const observation = await this.repository.saveObservation(
+            scraper.site, item.url, data, scheduleNextCheck(data, item.recheckCount),
+          );
           collected += 1;
+          if (observation.outcome === 'new') newCount += 1;
+          else if (observation.outcome === 'updated') updated += 1;
+          else unchanged += 1;
         } catch (error) {
           failed += 1;
           await this.repository.postponeFailedLot(item.url, item.recheckCount);
@@ -77,6 +88,6 @@ export class HistoricalCollectorService {
     });
 
     await Promise.all(workers);
-    return { discovered: items.length, collected, failed };
+    return { discovered: items.length, collected, failed, new: newCount, updated, unchanged };
   }
 }

@@ -12,6 +12,9 @@ export interface LeiloCollectionProgress {
   processedPages: number;
   discovered: number;
   saved: number;
+  new: number;
+  updated: number;
+  unchanged: number;
   failed: number;
   mediaQueued: number;
   mediaDownloaded: number;
@@ -39,7 +42,7 @@ export class LeiloBulkCollectorService {
     if (this.progress.running) return this.getProgress();
 
     this.progress = { ...emptyProgress(), running: true, startedAt: new Date().toISOString() };
-    const runId = await this.repository.startRun();
+    const runId = await this.repository.startRun(undefined, 'leilo');
 
     try {
       const first = await this.catalog.scrapePage(1);
@@ -67,6 +70,9 @@ export class LeiloBulkCollectorService {
         discovered: this.progress.discovered,
         collected: this.progress.saved,
         failed: this.progress.failed,
+        new: this.progress.new,
+        updated: this.progress.updated,
+        unchanged: this.progress.unchanged,
       });
       this.logger.info('Leilo catalog collection completed', { ...this.progress });
       return this.getProgress();
@@ -77,7 +83,8 @@ export class LeiloBulkCollectorService {
       this.progress.lastError = message;
       await this.repository.finishRun(
         runId,
-        { discovered: this.progress.discovered, collected: this.progress.saved, failed: this.progress.failed + 1 },
+        { discovered: this.progress.discovered, collected: this.progress.saved, failed: this.progress.failed + 1,
+          new: this.progress.new, updated: this.progress.updated, unchanged: this.progress.unchanged },
         message,
       );
       this.logger.error('Leilo catalog collection failed', { error: message });
@@ -89,8 +96,9 @@ export class LeiloBulkCollectorService {
     this.progress.discovered += lots.length;
     for (const lot of lots) {
       try {
-        await this.repository.saveObservation('leilo', lot.url, lot.data, scheduleNextCheck(lot.data));
+        const observation = await this.repository.saveObservation('leilo', lot.url, lot.data, scheduleNextCheck(lot.data));
         this.progress.saved += 1;
+        this.progress[observation.outcome] += 1;
       } catch (error) {
         this.progress.failed += 1;
         this.logger.warn('Leilo lot could not be persisted', {
@@ -109,6 +117,9 @@ function emptyProgress(): LeiloCollectionProgress {
     processedPages: 0,
     discovered: 0,
     saved: 0,
+    new: 0,
+    updated: 0,
+    unchanged: 0,
     failed: 0,
     mediaQueued: 0,
     mediaDownloaded: 0,

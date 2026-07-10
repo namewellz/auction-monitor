@@ -200,15 +200,17 @@ async function refreshCatalog(updateUrl = true) {
   const filterParams = buildParams(false);
   const lotParams = buildParams(true);
   try {
-    const [facetData, lotData, statsData] = await Promise.all([
+    const [facetData, lotData, statsData, historyData] = await Promise.all([
       api(`/api/lots/facets?${filterParams}`),
       api(`/api/lots?${lotParams}`),
       api(`/api/stats?${filterParams}`),
+      api(`/api/collection/history?limit=10${state.filters.site.length === 1 ? `&site=${encodeURIComponent(state.filters.site[0])}` : ''}`),
     ]);
     if (sequence !== state.requestSequence) return;
     state.facets = facetData.facets;
     state.total = lotData.total;
     renderStats(statsData);
+    renderCollectionHistory(historyData);
     renderFacets();
     renderActiveFilters();
     renderLots(lotData);
@@ -218,6 +220,51 @@ async function refreshCatalog(updateUrl = true) {
   } finally {
     if (sequence === state.requestSequence) byId('lot-list').classList.remove('loading');
   }
+}
+
+function renderCollectionHistory(runs) {
+  const body = byId('collection-history-body');
+  const health = byId('collection-health');
+  if (!runs.length) {
+    body.innerHTML = '<tr><td colspan="8" class="history-empty">Nenhuma varredura registrada para esta origem.</td></tr>';
+    health.className = 'collection-health neutral';
+    health.innerHTML = '<i aria-hidden="true"></i><span>Aguardando primeira execução</span>';
+    return;
+  }
+  const latestState = collectionRunState(runs[0]);
+  health.className = `collection-health ${latestState.className}`;
+  health.innerHTML = `<i aria-hidden="true"></i><span>${escapeHtml(latestState.healthLabel)}</span>`;
+  body.innerHTML = runs.map((run) => {
+    const runState = collectionRunState(run);
+    const errorTitle = run.error ? ` title="${escapeAttr(run.error)}"` : '';
+    return `<tr>
+      <td><strong>${dateTime(run.startedAt)}</strong><small>${relativeTime(run.startedAt)}</small></td>
+      <td>${escapeHtml(run.site ? siteLabel(run.site) : 'Todos os sites')}</td>
+      <td><span class="run-status ${runState.className}"${errorTitle}><i aria-hidden="true"></i>${escapeHtml(runState.label)}</span></td>
+      <td class="metric new">${number(run.newCount)}</td>
+      <td class="metric updated">${number(run.updatedCount)}</td>
+      <td class="metric">${number(run.unchangedCount)}</td>
+      <td class="metric ${Number(run.failedCount) ? 'failed' : ''}">${number(run.failedCount)}</td>
+      <td>${runDuration(run.startedAt, run.finishedAt)}</td>
+    </tr>`;
+  }).join('');
+}
+
+function collectionRunState(run) {
+  if (run.status === 'running') return { className: 'running', label: 'Em andamento', healthLabel: 'Varredura em andamento' };
+  if (run.status === 'failed') return { className: 'failed', label: 'Falhou', healthLabel: 'Última varredura falhou' };
+  if (Number(run.failedCount) > 0) return { className: 'warning', label: 'Parcial', healthLabel: 'Última varredura teve falhas' };
+  return { className: 'success', label: 'Concluída', healthLabel: 'Coleta atualizada normalmente' };
+}
+
+function runDuration(startedAt, finishedAt) {
+  if (!startedAt) return '-';
+  if (!finishedAt) return 'Em andamento';
+  const seconds = Math.max(0, Math.round((new Date(finishedAt) - new Date(startedAt)) / 1000));
+  if (seconds < 60) return `${seconds}s`;
+  const minutes = Math.floor(seconds / 60);
+  const remainder = seconds % 60;
+  return remainder ? `${minutes}m ${remainder}s` : `${minutes}m`;
 }
 
 function renderFacets() {
@@ -747,7 +794,7 @@ async function pollCollection() {
   if (state.collecting) {
     const percentage = progress.totalPages ? Math.round((progress.processedPages / progress.totalPages) * 100) : 2;
     byId('collection-title').textContent = `Atualizando ${progress.site ? siteLabel(progress.site) : 'catálogos'}`;
-    byId('collection-detail').textContent = `${progress.processedPages}/${progress.totalPages || '?'} páginas · ${progress.saved} lotes salvos`;
+    byId('collection-detail').textContent = `${progress.processedPages}/${progress.totalPages || '?'} páginas · ${progress.new} novos · ${progress.updated} atualizados · ${progress.unchanged} sem alteração`;
     byId('collection-progress').style.width = `${percentage}%`;
   } else if (progress.lastError) {
     byId('collection-title').textContent = 'Falha na última coleta';

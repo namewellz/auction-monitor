@@ -176,6 +176,22 @@ export class DashboardRepository {
     return result.rows;
   }
 
+  public async collectionRuns(site?: string, limit = 10): Promise<unknown[]> {
+    const result = await this.pool.query(`
+      SELECT cr.id::int, COALESCE(cr.site, cs.site) AS site,
+        cr.started_at AS "startedAt", cr.finished_at AS "finishedAt", cr.status,
+        cr.discovered_count AS "discoveredCount", cr.collected_count AS "collectedCount",
+        cr.new_count AS "newCount", cr.updated_count AS "updatedCount",
+        cr.unchanged_count AS "unchangedCount", cr.failed_count AS "failedCount", cr.error
+      FROM collection_runs cr
+      LEFT JOIN collection_sources cs ON cs.id = cr.source_id
+      WHERE ($1::text IS NULL OR COALESCE(cr.site, cs.site) = $1)
+      ORDER BY cr.started_at DESC
+      LIMIT $2
+    `, [site ?? null, limit]);
+    return result.rows;
+  }
+
   public async events(site?: string): Promise<unknown[]> {
     const result = await this.pool.query(`
       SELECT

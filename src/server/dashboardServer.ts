@@ -35,6 +35,13 @@ export class DashboardServer {
       if (url.pathname === '/api/sites' && request.method === 'GET') {
         return json(response, 200, await this.repository.sites());
       }
+      if (url.pathname === '/api/collection/history' && request.method === 'GET') {
+        const limit = Math.min(50, positiveInt(url.searchParams.get('limit'), 10));
+        return json(response, 200, await this.repository.collectionRuns(
+          url.searchParams.get('site') ?? undefined,
+          limit,
+        ));
+      }
       if (url.pathname === '/api/lots/facets' && request.method === 'GET') {
         return json(response, 200, await this.repository.facets(filtersFromUrl(url, 1, 1)));
       }

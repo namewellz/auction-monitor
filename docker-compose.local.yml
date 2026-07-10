@@ -1,0 +1,29 @@
+# Local Windows persistence override. Application services and settings remain
+# defined by docker-compose.yml, matching the production/Portainer stack.
+services:
+  postgres:
+    volumes: !override
+      - postgres-data:/var/lib/postgresql/data
+
+  minio:
+    volumes: !override
+      - minio-data:/data
+
+  dashboard:
+    build: .
+    labels:
+      - com.centurylinklabs.watchtower.enable=false
+
+  collector:
+    build: .
+
+  auction-monitor:
+    build: .
+
+  watchtower:
+    profiles:
+      - production-only
+
+volumes:
+  postgres-data:
+  minio-data:

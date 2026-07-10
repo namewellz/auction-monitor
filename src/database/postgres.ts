@@ -238,10 +238,25 @@ export async function runPostgresMigrations(pool: Pool): Promise<void> {
       discovered_count INTEGER NOT NULL DEFAULT 0,
       collected_count INTEGER NOT NULL DEFAULT 0,
       failed_count INTEGER NOT NULL DEFAULT 0,
+      new_count INTEGER NOT NULL DEFAULT 0,
+      updated_count INTEGER NOT NULL DEFAULT 0,
+      unchanged_count INTEGER NOT NULL DEFAULT 0,
+      site TEXT,
       error TEXT
     );
 
+    ALTER TABLE collection_runs ADD COLUMN IF NOT EXISTS new_count INTEGER NOT NULL DEFAULT 0;
+    ALTER TABLE collection_runs ADD COLUMN IF NOT EXISTS updated_count INTEGER NOT NULL DEFAULT 0;
+    ALTER TABLE collection_runs ADD COLUMN IF NOT EXISTS unchanged_count INTEGER NOT NULL DEFAULT 0;
+    ALTER TABLE collection_runs ADD COLUMN IF NOT EXISTS site TEXT;
+
+    UPDATE collection_runs
+    SET status='failed', finished_at=COALESCE(finished_at,NOW()),
+      error=COALESCE(error,'Execução interrompida antes da conclusão.')
+    WHERE status='running';
+
     CREATE INDEX IF NOT EXISTS idx_market_lots_due ON market_lots (finalized_at, next_check_at);
+    CREATE INDEX IF NOT EXISTS idx_collection_runs_started ON collection_runs (started_at DESC);
     CREATE INDEX IF NOT EXISTS idx_market_lots_analysis ON market_lots (brand, model, model_year, sale_status);
     CREATE INDEX IF NOT EXISTS idx_market_lots_event ON market_lots (event_id, lot_number);
     CREATE INDEX IF NOT EXISTS idx_market_lots_site ON market_lots (site);

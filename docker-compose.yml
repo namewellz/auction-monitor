@@ -57,7 +57,10 @@ services:
 
 
   dashboard:
-    build: .
+    image: ${APP_IMAGE:-ghcr.io/namewellz/auction-monitor:latest}
+
+    labels:
+      - com.centurylinklabs.watchtower.enable=true
 
     command:
       - node
@@ -104,7 +107,10 @@ services:
 
 
   collector:
-    build: .
+    image: ${APP_IMAGE:-ghcr.io/namewellz/auction-monitor:latest}
+
+    labels:
+      - com.centurylinklabs.watchtower.enable=true
 
     profiles:
       - multi-site
@@ -135,7 +141,10 @@ services:
 
 
   auction-monitor:
-    build: .
+    image: ${APP_IMAGE:-ghcr.io/namewellz/auction-monitor:latest}
+
+    labels:
+      - com.centurylinklabs.watchtower.enable=true
 
     profiles:
       - telegram
@@ -147,5 +156,21 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+
+    restart: unless-stopped
+
+
+  watchtower:
+    image: nickfedor/watchtower:1.19.0
+
+    environment:
+      WATCHTOWER_LABEL_ENABLE: "true"
+      WATCHTOWER_CLEANUP: "true"
+      WATCHTOWER_POLL_INTERVAL: ${WATCHTOWER_POLL_INTERVAL:-300}
+      WATCHTOWER_TIMEOUT: 30s
+      TZ: America/Sao_Paulo
+
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
 
     restart: unless-stopped

@@ -14,6 +14,9 @@ export interface CatalogCollectionProgress {
   processedPages: number;
   discovered: number;
   saved: number;
+  new: number;
+  updated: number;
+  unchanged: number;
   failed: number;
   mediaQueued: number;
   mediaDownloaded: number;
@@ -43,7 +46,7 @@ export class CatalogCollectionService {
     const selected = site ? this.providers.filter((provider) => provider.site === site) : this.providers;
     if (!selected.length) throw new Error(`No catalog provider registered for site: ${site ?? 'all'}`);
     this.progress = { ...emptyProgress(), running: true, ...(site ? { site } : {}), startedAt: new Date().toISOString() };
-    const runId = await this.repository.startRun();
+    const runId = await this.repository.startRun(undefined, site);
     const visited = new Set<string>();
 
     try {
@@ -61,6 +64,9 @@ export class CatalogCollectionService {
         discovered: this.progress.discovered,
         collected: this.progress.saved,
         failed: this.progress.failed,
+        new: this.progress.new,
+        updated: this.progress.updated,
+        unchanged: this.progress.unchanged,
       });
       this.logger.info('Catalog collection completed', { ...this.progress });
     } catch (error) {
@@ -68,7 +74,8 @@ export class CatalogCollectionService {
       Object.assign(this.progress, { running: false, finishedAt: new Date().toISOString(), lastError: message });
       await this.repository.finishRun(
         runId,
-        { discovered: this.progress.discovered, collected: this.progress.saved, failed: this.progress.failed + 1 },
+        { discovered: this.progress.discovered, collected: this.progress.saved, failed: this.progress.failed + 1,
+          new: this.progress.new, updated: this.progress.updated, unchanged: this.progress.unchanged },
         message,
       );
       this.logger.error('Catalog collection failed', { site, error: message });
@@ -106,8 +113,9 @@ export class CatalogCollectionService {
           ...(lot.classification ? { classification: lot.classification } : {}),
           ...(lot.assetType ? { assetType: lot.assetType } : {}),
         };
-        await this.repository.saveObservation(provider.site, lot.url, data, scheduleNextCheck(data));
+        const observation = await this.repository.saveObservation(provider.site, lot.url, data, scheduleNextCheck(data));
         this.progress.saved += 1;
+        this.progress[observation.outcome] += 1;
       } catch (error) {
         this.progress.failed += 1;
         this.logger.warn('Catalog lot could not be persisted', {
@@ -128,6 +136,9 @@ function emptyProgress(): CatalogCollectionProgress {
     processedPages: 0,
     discovered: 0,
     saved: 0,
+    new: 0,
+    updated: 0,
+    unchanged: 0,
     failed: 0,
     mediaQueued: 0,
     mediaDownloaded: 0,

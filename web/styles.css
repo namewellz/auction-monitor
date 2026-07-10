@@ -70,6 +70,28 @@ main { width: min(1540px, calc(100% - 48px)); margin: 0 auto; padding: 22px 0 48
 .summary-band > div:last-child { border-right: 0; }
 .summary-band span { color: var(--muted); font-size: 11px; text-transform: uppercase; }
 .summary-band strong { font-size: 19px; overflow: hidden; text-overflow: ellipsis; }
+.collection-history { margin-top: 18px; overflow: hidden; background: white; border: 1px solid var(--line); }
+.collection-history > header { min-height: 76px; padding: 14px 16px; display: flex; align-items: center; justify-content: space-between; gap: 20px; border-bottom: 1px solid var(--line); }
+.collection-history h2 { margin: 3px 0 0; font-size: 20px; }
+.collection-health { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 12px; font-weight: 750; }
+.collection-health i, .run-status i { width: 8px; height: 8px; flex: 0 0 8px; border-radius: 50%; background: #99a4ad; }
+.collection-health.success i, .run-status.success i { background: var(--green); }
+.collection-health.warning i, .run-status.warning i { background: var(--amber); }
+.collection-health.failed i, .run-status.failed i { background: var(--red); }
+.collection-health.running i, .run-status.running i { background: var(--cyan); box-shadow: 0 0 0 4px rgba(8,167,221,.13); }
+.collection-history-scroll { overflow-x: auto; }
+.collection-history table { width: 100%; border-collapse: collapse; font-size: 12px; }
+.collection-history th, .collection-history td { padding: 11px 14px; border-bottom: 1px solid #e8ecef; text-align: left; white-space: nowrap; }
+.collection-history tr:last-child td { border-bottom: 0; }
+.collection-history th { color: var(--muted); background: #fafbfc; font-size: 10px; text-transform: uppercase; }
+.collection-history td:first-child { display: grid; gap: 2px; }
+.collection-history td:first-child small { color: var(--muted); }
+.collection-history .metric { font-variant-numeric: tabular-nums; font-weight: 750; }
+.collection-history .metric.new { color: var(--green); }
+.collection-history .metric.updated { color: #087da5; }
+.collection-history .metric.failed { color: var(--red); }
+.run-status { width: fit-content; display: inline-flex; align-items: center; gap: 7px; font-weight: 750; }
+.history-empty { padding: 24px !important; color: var(--muted); text-align: center !important; }
 .catalog-heading { min-height: 102px; display: flex; justify-content: space-between; align-items: center; }
 .eyebrow { color: var(--cyan); font-size: 13px; font-weight: 800; text-transform: uppercase; }
 h1 { margin: 3px 0 0; font-size: 28px; letter-spacing: 0; }
@@ -271,6 +293,8 @@ h1 { margin: 3px 0 0; font-size: 28px; letter-spacing: 0; }
   .summary-band > div { padding: 10px; }
   .summary-band span { font-size: 9px; }
   .summary-band strong { font-size: 16px; }
+  .collection-history { margin-top: 14px; }
+  .collection-history > header { align-items: flex-start; flex-direction: column; gap: 9px; }
   .catalog-heading { min-height: 82px; }
   h1 { font-size: 23px; }
   .catalog-layout { grid-template-columns: 1fr; }

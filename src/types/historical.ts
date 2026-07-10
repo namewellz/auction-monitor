@@ -35,4 +35,7 @@ export interface CollectionRunResult {
   discovered: number;
   collected: number;
   failed: number;
+  new: number;
+  updated: number;
+  unchanged: number;
 }

@@ -46,9 +46,12 @@
     <section class="collection-history" aria-labelledby="collection-history-title">
       <header>
         <div><span class="eyebrow">Saúde da coleta</span><h2 id="collection-history-title">Histórico de atualizações</h2></div>
-        <div id="collection-health" class="collection-health neutral"><i aria-hidden="true"></i><span>Aguardando primeira execução</span></div>
+        <div class="collection-history-actions">
+          <div id="collection-health" class="collection-health neutral"><i aria-hidden="true"></i><span>Aguardando primeira execução</span></div>
+          <button id="collection-history-toggle" class="history-toggle" type="button" aria-expanded="false" aria-controls="collection-history-content">Ver histórico</button>
+        </div>
       </header>
-      <div class="collection-history-scroll">
+      <div id="collection-history-content" class="collection-history-scroll" hidden>
         <table>
           <thead><tr><th>Execução</th><th>Origem</th><th>Status</th><th>Novos</th><th>Atualizados</th><th>Sem alteração</th><th>Falhas</th><th>Duração</th></tr></thead>
           <tbody id="collection-history-body"><tr><td colspan="8" class="history-empty">Carregando histórico...</td></tr></tbody>

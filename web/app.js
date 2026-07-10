@@ -26,6 +26,7 @@ const state = {
   view: 'grid',
   sort: 'auction_desc',
   collecting: false,
+  historyExpanded: false,
   filters: Object.fromEntries(facetConfig.map((facet) => [facet.key, []])),
   facets: {},
   facetSearch: {},
@@ -49,8 +50,10 @@ const viewerState = {
 const byId = (id) => document.getElementById(id);
 
 document.addEventListener('DOMContentLoaded', () => {
+  state.historyExpanded = storedHistoryPreference();
   hydrateStateFromUrl();
   bindEvents();
+  reflectCollectionHistoryState();
   reflectStateInControls();
   void loadDashboard();
   setInterval(pollCollection, 3000);
@@ -131,6 +134,7 @@ function bindEvents() {
     applyState();
   });
   byId('collect-button').addEventListener('click', startCollection);
+  byId('collection-history-toggle').addEventListener('click', toggleCollectionHistory);
   byId('mobile-filter-button').addEventListener('click', openFilters);
   byId('close-filters').addEventListener('click', closeFilters);
   byId('filter-backdrop').addEventListener('click', closeFilters);
@@ -248,6 +252,24 @@ function renderCollectionHistory(runs) {
       <td>${runDuration(run.startedAt, run.finishedAt)}</td>
     </tr>`;
   }).join('');
+}
+
+function toggleCollectionHistory() {
+  state.historyExpanded = !state.historyExpanded;
+  try { localStorage.setItem('collection-history-expanded', String(state.historyExpanded)); } catch {}
+  reflectCollectionHistoryState();
+}
+
+function reflectCollectionHistoryState() {
+  const toggle = byId('collection-history-toggle');
+  const content = byId('collection-history-content');
+  toggle.setAttribute('aria-expanded', String(state.historyExpanded));
+  toggle.textContent = state.historyExpanded ? 'Recolher' : 'Ver histórico';
+  content.hidden = !state.historyExpanded;
+}
+
+function storedHistoryPreference() {
+  try { return localStorage.getItem('collection-history-expanded') === 'true'; } catch { return false; }
 }
 
 function collectionRunState(run) {

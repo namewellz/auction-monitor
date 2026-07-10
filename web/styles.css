@@ -73,6 +73,7 @@ main { width: min(1540px, calc(100% - 48px)); margin: 0 auto; padding: 22px 0 48
 .collection-history { margin-top: 18px; overflow: hidden; background: white; border: 1px solid var(--line); }
 .collection-history > header { min-height: 76px; padding: 14px 16px; display: flex; align-items: center; justify-content: space-between; gap: 20px; border-bottom: 1px solid var(--line); }
 .collection-history h2 { margin: 3px 0 0; font-size: 20px; }
+.collection-history-actions { display: flex; align-items: center; justify-content: flex-end; gap: 18px; }
 .collection-health { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 12px; font-weight: 750; }
 .collection-health i, .run-status i { width: 8px; height: 8px; flex: 0 0 8px; border-radius: 50%; background: #99a4ad; }
 .collection-health.success i, .run-status.success i { background: var(--green); }
@@ -91,6 +92,10 @@ main { width: min(1540px, calc(100% - 48px)); margin: 0 auto; padding: 22px 0 48
 .collection-history .metric.updated { color: #087da5; }
 .collection-history .metric.failed { color: var(--red); }
 .run-status { width: fit-content; display: inline-flex; align-items: center; gap: 7px; font-weight: 750; }
+.history-toggle { min-height: 34px; padding: 0 12px; border: 1px solid #c8d2da; border-radius: 4px; background: white; color: var(--navy); font-size: 12px; font-weight: 750; }
+.history-toggle:hover { border-color: var(--navy); background: #f7f9fa; }
+.history-toggle::after { content: "↓"; margin-left: 7px; }
+.history-toggle[aria-expanded="true"]::after { content: "↑"; }
 .history-empty { padding: 24px !important; color: var(--muted); text-align: center !important; }
 .catalog-heading { min-height: 102px; display: flex; justify-content: space-between; align-items: center; }
 .eyebrow { color: var(--cyan); font-size: 13px; font-weight: 800; text-transform: uppercase; }
@@ -295,6 +300,7 @@ h1 { margin: 3px 0 0; font-size: 28px; letter-spacing: 0; }
   .summary-band strong { font-size: 16px; }
   .collection-history { margin-top: 14px; }
   .collection-history > header { align-items: flex-start; flex-direction: column; gap: 9px; }
+  .collection-history-actions { width: 100%; justify-content: space-between; }
   .catalog-heading { min-height: 82px; }
   h1 { font-size: 23px; }
   .catalog-layout { grid-template-columns: 1fr; }

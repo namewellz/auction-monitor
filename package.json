@@ -9,6 +9,7 @@
     "collector:dev": "tsx watch src/collector.ts",
     "collector:start": "node dist/collector.js",
     "collect:url": "tsx src/tools/collectUrl.ts",
+    "collect:leilo-event": "tsx src/tools/collectLeiloEvent.ts",
     "revalidate:site": "tsx src/tools/revalidateSite.ts",
     "media:optimize": "tsx src/tools/optimizeMedia.ts",
     "leilo:dev": "tsx watch src/leiloApp.ts",

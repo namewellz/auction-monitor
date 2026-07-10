@@ -86,6 +86,12 @@ Para persistir uma URL diretamente, sem Telegram:
 docker compose -f docker-compose.scrape.yml run --rm scrape npm run collect:url -- <url>
 ```
 
+Para recuperar todos os lotes de um evento encerrado da Leilo pelo ID do evento:
+
+```bash
+docker compose exec dashboard node dist/tools/collectLeiloEvent.js <event-id> Pesados
+```
+
 As tabelas analiticas do PostgreSQL sao `auction_events`, `market_lots`, `lot_snapshots`,
 `lot_media`, `collection_sources` e `collection_runs`. Imagens sao baixadas para o MinIO,
 convertidas para WebP, deduplicadas por SHA-256 e servidas pelo painel atraves de

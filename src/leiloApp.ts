@@ -39,6 +39,7 @@ const bulkCollector = new CatalogCollectionService(
   [
     new LeiloCatalogScraper(config.leiloApiUrl, 'Carros'),
     new LeiloCatalogScraper(config.leiloApiUrl, 'Motos'),
+    new LeiloCatalogScraper(config.leiloApiUrl, 'Pesados'),
     new VipLeiloesCatalogProvider(vipClient, 'Seminovos'),
     new VipLeiloesCatalogProvider(vipClient, 'Usados'),
     new VipLeiloesCatalogProvider(vipClient, 'Motos'),

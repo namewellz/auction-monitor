@@ -131,10 +131,12 @@ export class LeiloScraper implements AuctionScraper {
   }
 }
 
-function normalizeAssetType(value: string | undefined, url: string): 'car' | 'motorcycle' {
+function normalizeAssetType(value: string | undefined, url: string): 'car' | 'motorcycle' | 'heavy' {
   const source = `${value ?? ''} ${new URL(url).pathname}`
     .normalize('NFD').replace(/\p{Diacritic}/gu, '').toLowerCase();
-  return source.includes('/motos/') || source.includes('motos') ? 'motorcycle' : 'car';
+  if (source.includes('/motos/') || source.includes('motos')) return 'motorcycle';
+  if (source.includes('/pesados/') || source.includes('pesados')) return 'heavy';
+  return 'car';
 }
 
 async function fetchDetail(vehicleId: string): Promise<LeiloLot | undefined> {

@@ -48,7 +48,7 @@ export interface LeiloCatalogPage extends Omit<CatalogPage, 'lots'> {
   lots: Array<{ url: string; data: LotData }>;
 }
 
-export type LeiloCatalogType = 'Carros' | 'Motos';
+export type LeiloCatalogType = 'Carros' | 'Motos' | 'Pesados';
 
 const stateNames: Record<string, string> = {
   AC: 'acre', AL: 'alagoas', AP: 'amapa', AM: 'amazonas', BA: 'bahia', CE: 'ceara',
@@ -67,8 +67,9 @@ export class LeiloCatalogScraper implements CatalogProvider {
   public constructor(
     private readonly apiUrl = 'https://api.leilo.com.br/v1/lote/busca-elastic',
     private readonly catalogType: LeiloCatalogType = 'Carros',
+    private readonly eventId?: string,
   ) {
-    this.source = catalogType.toLowerCase();
+    this.source = eventId ? `${catalogType.toLowerCase()}:${eventId}` : catalogType.toLowerCase();
     this.detailApiUrl = new URL('/v1/lote/by-id/', apiUrl).toString();
   }
 
@@ -86,7 +87,12 @@ export class LeiloCatalogScraper implements CatalogProvider {
       body: JSON.stringify({
         from: (page - 1) * pageSize,
         size: pageSize,
-        requisicoesBusca: [{ campo: 'tipo', tipo: 'exata', label: 'Tipo', valor: this.catalogType }],
+        requisicoesBusca: [
+          { campo: 'tipo', tipo: 'exata', label: 'Tipo', valor: this.catalogType },
+          ...(this.eventId
+            ? [{ campo: 'leilao.id', tipo: 'exata', label: 'Leilão', valor: this.eventId }]
+            : []),
+        ],
         listaOrdenacao: [{ campo: 'dataFim', tipoCampo: 'long', tipoOrdenacao: 'asc' }],
       }),
     });
@@ -232,10 +238,11 @@ function mapCatalogLot(lot: LeiloCatalogLot): LotData {
   };
 }
 
-function normalizeAssetType(value: string | undefined): 'car' | 'motorcycle' {
-  return value?.normalize('NFD').replace(/\p{Diacritic}/gu, '').toLowerCase().includes('moto')
-    ? 'motorcycle'
-    : 'car';
+function normalizeAssetType(value: string | undefined): 'car' | 'motorcycle' | 'heavy' {
+  const normalized = value?.normalize('NFD').replace(/\p{Diacritic}/gu, '').toLowerCase() ?? '';
+  if (normalized.includes('moto')) return 'motorcycle';
+  if (normalized.includes('pesad')) return 'heavy';
+  return 'car';
 }
 
 function buildLotUrl(lot: LeiloCatalogLot): string {

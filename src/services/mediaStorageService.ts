@@ -29,6 +29,7 @@ export interface MediaOptimizationResult {
 export class MediaStorageService {
   private readonly client: Client;
   private readonly imageOptimizer: ImageOptimizer;
+  private pendingDownload: Promise<MediaDownloadResult> | undefined;
 
   public constructor(
     private readonly repository: HistoricalRepository,
@@ -66,7 +67,16 @@ export class MediaStorageService {
     }
   }
 
-  public async downloadPending(limit = 10_000): Promise<MediaDownloadResult> {
+  public downloadPending(limit = 10_000): Promise<MediaDownloadResult> {
+    if (this.pendingDownload) return this.pendingDownload;
+    const download = this.performDownloadPending(limit).finally(() => {
+      if (this.pendingDownload === download) this.pendingDownload = undefined;
+    });
+    this.pendingDownload = download;
+    return download;
+  }
+
+  private async performDownloadPending(limit: number): Promise<MediaDownloadResult> {
     const items = await this.repository.listPendingMedia(limit);
     const result: MediaDownloadResult = { queued: items.length, downloaded: 0, failed: 0, bytes: 0 };
     let cursor = 0;

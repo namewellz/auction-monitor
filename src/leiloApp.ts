@@ -17,6 +17,7 @@ import { CatalogCollectionService } from './services/catalogCollectionService.js
 import { FrancoRealEstateCatalogProvider } from './scrapers/providers/francoRealEstateCatalog.js';
 import { AlessandroTeixeiraRealEstateCatalogProvider } from './scrapers/providers/alessandroTeixeiraRealEstateCatalog.js';
 import { AlvaroRealEstateCatalogProvider } from './scrapers/providers/alvaroRealEstateCatalog.js';
+import { SuperbidCatalogProvider } from './scrapers/providers/superbidCatalog.js';
 
 const logger = new Logger(config.logLevel);
 const pool = createPostgresPool(config.postgresUrl);
@@ -50,6 +51,8 @@ const bulkCollector = new CatalogCollectionService(
     new FrancoRealEstateCatalogProvider(config.francoRequestIntervalMs),
     new AlessandroTeixeiraRealEstateCatalogProvider(config.alessandroRequestIntervalMs),
     new AlvaroRealEstateCatalogProvider(config.alvaroRequestIntervalMs),
+    new SuperbidCatalogProvider(config.superbidCatalogPageSize, config.superbidRequestIntervalMs,
+      config.superbidCatalogMaxOffers),
   ],
   scraperFactory,
   mediaStorage,

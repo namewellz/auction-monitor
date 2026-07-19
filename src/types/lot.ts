@@ -47,6 +47,25 @@ export interface LotData {
   locks?: string;
   windows?: string;
   additionalDetails?: Record<string, string>;
+  vehicleDetails?: {
+    vehicleCondition?: string;
+    engineCondition?: string;
+    bodyCondition?: string;
+    paintCondition?: string;
+    upholsteryCondition?: string;
+    tireCondition?: string;
+    wheelType?: string;
+    doorCount?: number;
+    seatType?: string;
+    soundSystem?: string;
+    chassisCondition?: string;
+    vehicleRestrictions?: string;
+    taxStatus?: string;
+    debtNotes?: string;
+    referenceCode?: string;
+    extractionConfidence?: 'structured' | 'label_parsed' | 'inferred';
+    unmappedDetails?: Record<string, string>;
+  };
   finalBid?: number;
   commissionFee?: number;
   buyerFee?: number;

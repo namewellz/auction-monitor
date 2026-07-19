@@ -88,7 +88,7 @@ export class DashboardServer {
         if (!this.collector.getProgress().running) void this.collector.collectAll('leilo');
         return json(response, 202, this.collector.getProgress());
       }
-      const collectionMatch = url.pathname.match(/^\/api\/collection\/(leilo|vipleiloes|francoleiloes|alessandroteixeira|alvaroleiloes)$/);
+      const collectionMatch = url.pathname.match(/^\/api\/collection\/(leilo|vipleiloes|superbid|francoleiloes|alessandroteixeira|alvaroleiloes)$/);
       if (collectionMatch?.[1] && request.method === 'POST') {
         if (!this.collector.getProgress().running) void this.collector.collectAll(collectionMatch[1]);
         return json(response, 202, this.collector.getProgress());
@@ -156,6 +156,7 @@ function filtersFromUrl(url: URL, page: number, pageSize: number) {
     ...stringListFilter(url, 'city', 'cities'),
     ...stringListFilter(url, 'neighborhood', 'neighborhoods'),
     ...stringListFilter(url, 'propertyType', 'propertyTypes'),
+    ...stringListFilter(url, 'vehicleCondition', 'vehicleConditions'),
     ...stringListFilter(url, 'origin', 'origins'),
     ...stringListFilter(url, 'consignor', 'consignors'),
     ...stringListFilter(url, 'classification', 'classifications'),

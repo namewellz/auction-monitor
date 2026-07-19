@@ -13,6 +13,7 @@ export interface DashboardFilters {
   cities?: string[];
   neighborhoods?: string[];
   propertyTypes?: string[];
+  vehicleConditions?: string[];
   origins?: string[];
   consignors?: string[];
   classifications?: string[];
@@ -29,7 +30,7 @@ export interface DashboardFilters {
 export type LotSort = 'auction_desc' | 'auction_asc' | 'year_desc' | 'year_asc' | 'brand_asc' | 'brand_desc';
 
 export type LotFacetKey = 'site' | 'assetType' | 'event' | 'status' | 'brand' | 'model' | 'year' | 'state' |
-  'city' | 'neighborhood' | 'propertyType' | 'origin' | 'consignor' | 'classification' | 'fuel' | 'transmission' | 'runningAtEntry';
+  'city' | 'neighborhood' | 'propertyType' | 'vehicleCondition' | 'origin' | 'consignor' | 'classification' | 'fuel' | 'transmission' | 'runningAtEntry';
 
 export interface LotFacetOption {
   value: string;
@@ -123,6 +124,10 @@ function buildLotWhere(filters: DashboardFilters, omittedFacet?: LotFacetKey): {
   if (omittedFacet !== 'propertyType' && filters.propertyTypes?.length) {
     conditions.push(`EXISTS (SELECT 1 FROM real_estate_details red WHERE red.market_lot_id=ml.id
       AND red.property_type = ANY(${addParam(filters.propertyTypes)}::text[]))`);
+  }
+  if (omittedFacet !== 'vehicleCondition' && filters.vehicleConditions?.length) {
+    conditions.push(`EXISTS (SELECT 1 FROM vehicle_details vd WHERE vd.market_lot_id=ml.id
+      AND vd.vehicle_condition = ANY(${addParam(filters.vehicleConditions)}::text[]))`);
   }
   addList('origin', 'ml.origin', filters.origins);
   addList('consignor', 'ml.consignor', filters.consignors);
@@ -275,6 +280,7 @@ export class DashboardRepository {
         red.neighborhood, red.property_type AS "propertyType", red.occupancy_status AS "occupancyStatus",
         red.total_area_m2::float AS "totalAreaM2", red.private_area_m2::float AS "privateAreaM2",
         red.accepts_financing AS "acceptsFinancing",
+        vd.vehicle_condition AS "vehicleCondition",
         (SELECT id::int FROM lot_media WHERE market_lot_id=ml.id AND type='image' AND download_status='downloaded' ORDER BY position LIMIT 1) AS "primaryMediaId",
         (SELECT source_url FROM lot_media WHERE market_lot_id=ml.id AND type='image' ORDER BY position LIMIT 1) AS "primarySourceUrl",
         (SELECT COUNT(*)::int FROM lot_media WHERE market_lot_id=ml.id AND type='image') AS "imageCount",
@@ -284,6 +290,7 @@ export class DashboardRepository {
       FROM market_lots ml
       LEFT JOIN auction_events ae ON ae.id = ml.event_id
       LEFT JOIN real_estate_details red ON red.market_lot_id = ml.id
+      LEFT JOIN vehicle_details vd ON vd.market_lot_id = ml.id
       WHERE ${where}
       ORDER BY ${lotOrderBy(filters.sort)}
       LIMIT ${limit} OFFSET ${offset}
@@ -309,6 +316,7 @@ export class DashboardRepository {
       { key: 'neighborhood', value: '(SELECT red.neighborhood_normalized FROM real_estate_details red WHERE red.market_lot_id=ml.id)',
         label: "(SELECT red.neighborhood FROM real_estate_details red WHERE red.market_lot_id=ml.id)", limit: 1000 },
       { key: 'propertyType', value: '(SELECT red.property_type FROM real_estate_details red WHERE red.market_lot_id=ml.id)', limit: 500 },
+      { key: 'vehicleCondition', value: '(SELECT vd.vehicle_condition FROM vehicle_details vd WHERE vd.market_lot_id=ml.id)', limit: 100 },
       { key: 'origin', value: 'ml.origin', limit: 500 },
       { key: 'consignor', value: 'ml.consignor', limit: 1000 },
       { key: 'classification', value: 'ml.classification' },
@@ -364,10 +372,15 @@ export class DashboardRepository {
         ml.commission_fee::float, ml.buyer_fee::float, ml.other_fees::float, ml.total_cost::float,
         ae.name AS event_name, red.neighborhood, red.postal_code, red.property_type,
         red.occupancy_status, red.total_area_m2::float, red.private_area_m2::float,
-        red.latitude, red.longitude, red.accepts_financing
+        red.latitude, red.longitude, red.accepts_financing,
+        vd.vehicle_condition,vd.engine_condition,vd.body_condition,vd.paint_condition,
+        vd.upholstery_condition,vd.tire_condition,vd.wheel_type,vd.door_count,vd.seat_type,
+        vd.sound_system,vd.chassis_condition,vd.vehicle_restrictions,vd.tax_status,vd.debt_notes,
+        vd.reference_code,vd.extraction_confidence,vd.unmapped_details_json
       FROM market_lots ml
       LEFT JOIN auction_events ae ON ae.id = ml.event_id
       LEFT JOIN real_estate_details red ON red.market_lot_id = ml.id
+      LEFT JOIN vehicle_details vd ON vd.market_lot_id = ml.id
       WHERE ml.id=$1
     `, [id]);
     const lot = result.rows[0];

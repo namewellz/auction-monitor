@@ -151,6 +151,7 @@ export class HistoricalRepository {
       await this.insertChangeLog(client, marketLotId, previous, data, now, snapshotHash);
       await this.upsertMedia(client, marketLotId, data, now);
       await this.upsertRealEstateDetails(client, marketLotId, data);
+      await this.upsertVehicleDetails(client, marketLotId, data);
       await this.upsertBidHistory(client, marketLotId, data);
       await client.query('COMMIT');
       return {
@@ -523,6 +524,36 @@ export class HistoricalRepository {
         data.postalCode ?? null, data.propertyType ?? null, data.occupancyStatus ?? null,
         data.totalAreaM2 ?? null, data.privateAreaM2 ?? null, data.latitude ?? null,
         data.longitude ?? null, data.acceptsFinancing ?? null],
+    );
+  }
+
+  private async upsertVehicleDetails(client: PoolClient, marketLotId: number, data: LotData): Promise<void> {
+    if (!data.vehicleDetails || data.assetType === 'real_estate') return;
+    const details = data.vehicleDetails;
+    await client.query(
+      `INSERT INTO vehicle_details (
+        market_lot_id,vehicle_condition,engine_condition,body_condition,paint_condition,
+        upholstery_condition,tire_condition,wheel_type,door_count,seat_type,sound_system,
+        chassis_condition,vehicle_restrictions,tax_status,debt_notes,reference_code,
+        extraction_confidence,unmapped_details_json,updated_at
+      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18::jsonb,NOW())
+      ON CONFLICT(market_lot_id) DO UPDATE SET
+        vehicle_condition=EXCLUDED.vehicle_condition,engine_condition=EXCLUDED.engine_condition,
+        body_condition=EXCLUDED.body_condition,paint_condition=EXCLUDED.paint_condition,
+        upholstery_condition=EXCLUDED.upholstery_condition,tire_condition=EXCLUDED.tire_condition,
+        wheel_type=EXCLUDED.wheel_type,door_count=EXCLUDED.door_count,seat_type=EXCLUDED.seat_type,
+        sound_system=EXCLUDED.sound_system,chassis_condition=EXCLUDED.chassis_condition,
+        vehicle_restrictions=EXCLUDED.vehicle_restrictions,tax_status=EXCLUDED.tax_status,
+        debt_notes=EXCLUDED.debt_notes,reference_code=EXCLUDED.reference_code,
+        extraction_confidence=EXCLUDED.extraction_confidence,
+        unmapped_details_json=EXCLUDED.unmapped_details_json,updated_at=NOW()`,
+      [marketLotId, details.vehicleCondition ?? null, details.engineCondition ?? null,
+        details.bodyCondition ?? null, details.paintCondition ?? null, details.upholsteryCondition ?? null,
+        details.tireCondition ?? null, details.wheelType ?? null, details.doorCount ?? null,
+        details.seatType ?? null, details.soundSystem ?? null, details.chassisCondition ?? null,
+        details.vehicleRestrictions ?? null, details.taxStatus ?? null, details.debtNotes ?? null,
+        details.referenceCode ?? null, details.extractionConfidence ?? null,
+        JSON.stringify(details.unmappedDetails ?? {})],
     );
   }
 

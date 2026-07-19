@@ -229,6 +229,28 @@ export async function runPostgresMigrations(pool: Pool): Promise<void> {
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
 
+    CREATE TABLE IF NOT EXISTS vehicle_details (
+      market_lot_id BIGINT PRIMARY KEY REFERENCES market_lots(id) ON DELETE CASCADE,
+      vehicle_condition TEXT,
+      engine_condition TEXT,
+      body_condition TEXT,
+      paint_condition TEXT,
+      upholstery_condition TEXT,
+      tire_condition TEXT,
+      wheel_type TEXT,
+      door_count INTEGER,
+      seat_type TEXT,
+      sound_system TEXT,
+      chassis_condition TEXT,
+      vehicle_restrictions TEXT,
+      tax_status TEXT,
+      debt_notes TEXT,
+      reference_code TEXT,
+      extraction_confidence TEXT,
+      unmapped_details_json JSONB NOT NULL DEFAULT '{}'::jsonb,
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+
     CREATE TABLE IF NOT EXISTS storage_migrations (
       id BIGSERIAL PRIMARY KEY,
       lot_media_id BIGINT NOT NULL REFERENCES lot_media(id) ON DELETE CASCADE,
@@ -315,6 +337,7 @@ export async function runPostgresMigrations(pool: Pool): Promise<void> {
     CREATE INDEX IF NOT EXISTS idx_lot_media_storage_tier ON lot_media (storage_provider,storage_tier,last_accessed_at);
     CREATE INDEX IF NOT EXISTS idx_real_estate_location ON real_estate_details (state_code,city_code,neighborhood_normalized);
     CREATE INDEX IF NOT EXISTS idx_real_estate_type ON real_estate_details (property_type,occupancy_status,accepts_financing);
+    CREATE INDEX IF NOT EXISTS idx_vehicle_details_condition ON vehicle_details (vehicle_condition,engine_condition);
     CREATE INDEX IF NOT EXISTS idx_storage_migrations_status ON storage_migrations (status,started_at);
     CREATE INDEX IF NOT EXISTS idx_lot_media_optimization ON lot_media (optimization_profile, optimization_attempts, id)
       WHERE type='image' AND download_status='downloaded';

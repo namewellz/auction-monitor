@@ -220,6 +220,7 @@ h1 { margin: 3px 0 0; font-size: 28px; letter-spacing: 0; }
 .detail-section { margin-top: 26px; }
 .detail-section h3 { margin: 0 0 10px; font-size: 15px; }
 .detail-section p { margin: 0; color: #394957; line-height: 1.55; }
+.description-text { white-space: pre-line; }
 .original-link { display: inline-flex; min-height: 38px; padding: 0 14px; align-items: center; border: 1px solid var(--navy); border-radius: 4px; color: var(--navy); font-weight: 750; text-decoration: none; }
 .document-list { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 8px; }
 .document-list a { min-height: 52px; padding: 9px 11px; display: flex; align-items: center; justify-content: space-between; gap: 10px; border: 1px solid #cbd7df; border-radius: 4px; color: var(--navy); text-decoration: none; }

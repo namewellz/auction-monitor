@@ -4,6 +4,7 @@ const facetConfig = [
   { key: 'brand', param: 'brand', label: 'Marca', open: true, searchable: true, catalog: 'vehicles' },
   { key: 'model', param: 'model', label: 'Modelo', open: true, searchable: true, catalog: 'vehicles' },
   { key: 'year', param: 'year', label: 'Ano', open: true, catalog: 'vehicles' },
+  { key: 'vehicleCondition', param: 'vehicleCondition', label: 'Condição do veículo', open: true, catalog: 'vehicles' },
   { key: 'status', param: 'status', label: 'Status', open: true },
   { key: 'state', param: 'state', label: 'Estado' },
   { key: 'city', param: 'city', label: 'Cidade', searchable: true },
@@ -425,13 +426,14 @@ function lotCard(lot) {
   const location = [lot.city, lot.state].filter(Boolean).join(' / ') || 'Local não informado';
   const year = [lot.manufactureYear, lot.modelYear].filter(Boolean).join(' / ') || '-';
   const status = lot.businessStatus || businessStateLabel(lot.businessState);
+  const condition = lot.vehicleCondition ? ` · ${facetLabel('vehicleCondition', lot.vehicleCondition)}` : '';
   const facts = lot.assetType === 'real_estate'
     ? `<dl class="vehicle-facts"><div><dt>Tipo</dt><dd>${escapeHtml(lot.propertyType || 'Imóvel')}</dd></div><div><dt>Área</dt><dd>${areaLabel(lot.privateAreaM2 || lot.totalAreaM2)}</dd></div><div><dt>Local</dt><dd>${escapeHtml([lot.neighborhood, location].filter(Boolean).join(' · '))}</dd></div></dl>`
     : `<dl class="vehicle-facts"><div><dt>Ano</dt><dd>${escapeHtml(year)}</dd></div><div><dt>KM</dt><dd>${lot.mileage == null ? '-' : number(lot.mileage)}</dd></div><div><dt>Local</dt><dd>${escapeHtml(location)}</dd></div></dl>`;
   return `<article class="lot-card" tabindex="0" data-lot-id="${lot.id}">
     <figure>${image}<span class="status-badge status-${escapeAttr(lot.businessState || 'other')}">${escapeHtml(status)}</span><span class="source-badge">${escapeHtml(siteLabel(lot.site))}</span></figure>
     <div class="lot-card-body">
-      <div class="lot-identity"><span>${escapeHtml(assetTypeLabel(lot.assetType))} · Lote ${escapeHtml(lot.lotNumber || '-')} · ${number(lot.imageCount)} fotos</span><h2>${escapeHtml(lot.title)}</h2><small>${escapeHtml(lot.eventName || 'Evento não identificado')}</small></div>
+      <div class="lot-identity"><span>${escapeHtml(assetTypeLabel(lot.assetType))}${escapeHtml(condition)} · Lote ${escapeHtml(lot.lotNumber || '-')} · ${number(lot.imageCount)} fotos</span><h2>${escapeHtml(lot.title)}</h2><small>${escapeHtml(lot.eventName || 'Evento não identificado')}</small></div>
       ${facts}
       <div class="bid-block"><span>Lance atual</span><strong>${currency(lot.currentBid)}</strong><small>${endingText(lot.auctionEnd)}</small></div>
     </div>
@@ -578,6 +580,16 @@ async function openLot(id) {
   const documentsSection = documents.length
     ? `<section class="detail-section"><h3>Documentos</h3><div class="document-list">${documents.map((document, index) => `<a href="${escapeAttr(mediaUrl(document))}" target="_blank" rel="noopener"><span>${escapeHtml(document.label || `Documento ${index + 1}`)}</span><strong>${escapeHtml(documentTypeLabel(document.documentType) || fileTypeLabel(document.sourceUrl))}</strong></a>`).join('')}</div></section>`
     : '';
+  const inspection = [
+    ['Condição', lot.vehicle_condition], ['Motor', lot.engine_condition], ['Lataria', lot.body_condition],
+    ['Pintura', lot.paint_condition], ['Tapeçaria', lot.upholstery_condition], ['Pneus', lot.tire_condition],
+    ['Rodas', lot.wheel_type], ['Portas', lot.door_count], ['Bancos', lot.seat_type],
+    ['Som', lot.sound_system], ['Chassi', lot.chassis_condition], ['Restrições', lot.vehicle_restrictions],
+    ['Situação fiscal', lot.tax_status], ['Débitos', lot.debt_notes], ['Referência', lot.reference_code],
+  ].filter(([, value]) => hasCollectedValue(value));
+  const inspectionSection = !isRealEstate && inspection.length
+    ? `<section class="detail-section"><h3>Condição e vistoria</h3><div class="detail-grid compact">${inspection.map(([label, value]) => detailCell(label, value)).join('')}</div><small>Extração: ${escapeHtml(lot.extraction_confidence || '-')}</small></section>`
+    : '';
   const lotDetails = isRealEstate
     ? `${detailCell('Imóvel', lot.title, 'wide')}${detailCell('Tipo', lot.property_type || 'Imóvel')}${detailCell('Código', lot.external_code || '-')}
       ${detailCell('Lote', lot.lot_number || '-')}${detailCell('Área privativa', areaLabel(lot.private_area_m2))}${detailCell('Área total', areaLabel(lot.total_area_m2))}
@@ -600,8 +612,9 @@ async function openLot(id) {
       ${lotDetails}
     </div></section>
     ${equipmentSection}
+    ${inspectionSection}
     ${additionalDetailsSection}
-    <section class="detail-section"><h3>Observações</h3><p>${escapeHtml(lot.observations || 'Nenhuma observação coletada nesta listagem.')}</p></section>
+    <section class="detail-section"><h3>Observações</h3><p class="description-text">${escapeHtml(lot.observations || 'Nenhuma observação coletada nesta listagem.')}</p></section>
     ${documentsSection}
     ${video ? `<section class="detail-section"><h3>Vídeo</h3><a href="${escapeAttr(video.sourceUrl)}" target="_blank" rel="noopener">Abrir vídeo original</a></section>` : ''}
     <section class="detail-section"><h3>Alterações do anúncio</h3>${changes ? `<ol class="change-timeline">${changes}</ol>` : '<p>Nenhuma alteração detectada até agora.</p>'}</section>
@@ -810,6 +823,7 @@ function facetLabel(key, value) {
   if (key === 'status') return businessStateLabel(value);
   if (key === 'runningAtEntry') return value === 'yes' ? 'Sim' : 'Não';
   if (key === 'propertyType') return String(value).replace(/(^|\s)\S/g, (letter) => letter.toUpperCase());
+  if (key === 'vehicleCondition') return ({ sucata: 'Sucata', batido: 'Batido', avariado: 'Avariado' })[value] || value;
   return value;
 }
 

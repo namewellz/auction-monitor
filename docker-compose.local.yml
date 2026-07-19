@@ -15,6 +15,8 @@ services:
     build: .
     ports: !override
       - "3001:3000"
+    environment:
+      SUPERBID_CATALOG_MAX_OFFERS: 100
     labels:
       - com.centurylinklabs.watchtower.enable=false
 

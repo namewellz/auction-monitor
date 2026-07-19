@@ -15,7 +15,7 @@
       </a>
       <label class="global-search">
         <span class="search-icon" aria-hidden="true"></span>
-        <input id="search-input" type="search" placeholder="Busque por veículo, marca, comitente ou código" autocomplete="off">
+        <input id="search-input" type="search" placeholder="Busque por bem, marca, endereço, comitente ou código" autocomplete="off">
         <button id="search-clear" type="button" aria-label="Limpar busca" hidden>&times;</button>
       </label>
       <div class="header-actions">
@@ -23,8 +23,9 @@
         <button id="collect-button" class="accent-button" type="button">Atualizar coleta</button>
       </div>
     </div>
-    <nav id="source-nav" class="source-nav" aria-label="Origem dos lotes">
-      <button class="source-tab active" type="button" data-source="">Todos os sites</button>
+    <nav id="source-nav" class="source-nav" aria-label="Catálogo de bens">
+      <button class="source-tab active" type="button" data-catalog="vehicles">Veículos</button>
+      <button class="source-tab" type="button" data-catalog="real_estate">Imóveis</button>
     </nav>
   </header>
 
@@ -60,14 +61,14 @@
     </section>
 
     <section class="catalog-heading">
-      <div><span class="eyebrow">Catálogo consolidado</span><h1>Veículos de leilão</h1></div>
+      <div><span class="eyebrow">Catálogo consolidado</span><h1>Bens de leilão</h1></div>
       <button id="mobile-filter-button" class="outline-button mobile-only" type="button">Filtros <span id="mobile-filter-count">0</span></button>
     </section>
 
     <div id="active-filters" class="active-filters" hidden></div>
 
     <div class="catalog-layout">
-      <aside id="filter-panel" class="filter-panel" aria-label="Filtros de veículos">
+      <aside id="filter-panel" class="filter-panel" aria-label="Filtros de bens">
         <div class="filter-panel-head"><div><span>Busca refinada</span><strong>Filtros</strong></div><button id="close-filters" class="icon-button mobile-only" type="button" aria-label="Fechar filtros">&times;</button></div>
         <div id="facet-list"></div>
         <button id="clear-filters" class="clear-button" type="button">Limpar todos os filtros</button>
@@ -75,7 +76,7 @@
 
       <section class="results-panel">
         <div class="results-toolbar">
-          <div><strong id="result-count">0 veículos</strong><span id="page-label"></span></div>
+          <div><strong id="result-count">0 bens</strong><span id="page-label"></span></div>
           <div class="results-actions">
             <label class="sort-control"><span>Ordenar por</span><select id="sort-select">
               <option value="auction_desc">Data do leilão: mais recente</option>
@@ -98,7 +99,7 @@
           </div>
         </div>
         <div id="lot-list" class="lot-results grid-view" aria-live="polite"></div>
-        <div id="empty-state" class="empty-state" hidden>Nenhum veículo encontrado com estes filtros.</div>
+        <div id="empty-state" class="empty-state" hidden>Nenhum bem encontrado com estes filtros.</div>
         <nav class="pagination" aria-label="Paginação">
           <button id="previous-page" class="outline-button" type="button">Anterior</button>
           <span id="pagination-label">Página 1</span>

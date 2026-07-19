@@ -5,6 +5,7 @@ import type {
   HistoricalRepository,
   OptimizableMedia,
   OptimizedMediaMetadata,
+  PendingDocument,
   PendingMedia,
 } from '../database/historicalRepository.js';
 import type { Logger } from '../utils/logger.js';
@@ -88,6 +89,34 @@ export class MediaStorageService {
     });
 
     await Promise.all(workers);
+    const documents = await this.downloadPendingDocuments(limit);
+    result.queued += documents.queued;
+    result.downloaded += documents.downloaded;
+    result.failed += documents.failed;
+    result.bytes += documents.bytes;
+    return result;
+  }
+
+  private async downloadPendingDocuments(limit: number): Promise<MediaDownloadResult> {
+    const items = await this.repository.listPendingDocuments(limit);
+    const result: MediaDownloadResult = { queued: items.length, downloaded: 0, failed: 0, bytes: 0 };
+    let cursor = 0;
+    const workers = Array.from({ length: Math.min(Math.max(1, this.options.concurrency), items.length || 1) }, async () => {
+      while (cursor < items.length) {
+        const item = items[cursor++];
+        if (!item) continue;
+        try {
+          result.bytes += await this.downloadDocument(item);
+          result.downloaded += 1;
+        } catch (error) {
+          result.failed += 1;
+          const message = error instanceof Error ? error.message : String(error);
+          await this.repository.markMediaFailed(item.id, message);
+          this.logger.warn('Document download failed', { mediaId: item.id, url: item.sourceUrl, error: message });
+        }
+      }
+    });
+    await Promise.all(workers);
     return result;
   }
 
@@ -153,6 +182,40 @@ export class MediaStorageService {
     const stored = await this.storeOptimized(optimized, item.sourceUrl);
     await this.repository.markMediaDownloaded(item.id, stored);
     return optimized.buffer.length;
+  }
+
+  private async downloadDocument(item: PendingDocument): Promise<number> {
+    const response = await fetch(item.sourceUrl, {
+      headers: {
+        accept: 'application/pdf,application/octet-stream;q=0.9,*/*;q=0.8',
+        'user-agent': 'Mozilla/5.0 (compatible; AuctionMonitor/1.0)',
+      },
+      signal: AbortSignal.timeout(60_000),
+    });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const body = Buffer.from(await response.arrayBuffer());
+    if (!body.length) throw new Error('Empty document');
+    const receivedType = normalizeContentType(response.headers.get('content-type'));
+    const isPdf = receivedType === 'application/pdf' || body.subarray(0, 5).toString('ascii') === '%PDF-';
+    const contentType = isPdf ? 'application/pdf' : receivedType;
+    const contentHash = createHash('sha256').update(body).digest('hex');
+    const storageKey = `documents/sha256/${contentHash.slice(0, 2)}/${contentHash}.${isPdf ? 'pdf' : 'bin'}`;
+    let etag: string | undefined;
+    try {
+      etag = (await this.client.statObject(this.options.bucket, storageKey)).etag;
+    } catch {
+      etag = (await this.client.putObject(this.options.bucket, storageKey, body, body.length, {
+        'Content-Type': contentType,
+        'x-amz-meta-source-url': item.sourceUrl,
+        'x-amz-meta-document-type': item.documentType ?? 'other',
+        // S3 metadata headers must remain ASCII; preserve the original label URL-encoded.
+        'x-amz-meta-label': encodeURIComponent(item.label ?? 'Documento'),
+      })).etag;
+    }
+    await this.repository.markDocumentDownloaded(item.id, {
+      storageKey, contentHash, contentType, sizeBytes: body.length, ...(etag ? { etag } : {}),
+    }, this.options.bucket);
+    return body.length;
   }
 
   private async optimizeStored(item: OptimizableMedia): Promise<{ original: number; optimized: number }> {

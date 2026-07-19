@@ -33,7 +33,7 @@ export interface LotData {
   salePhase?: string;
   saleResult?: string;
   classification?: string;
-  assetType?: 'car' | 'motorcycle' | 'heavy';
+  assetType?: 'car' | 'motorcycle' | 'heavy' | 'real_estate';
   sourceAnnouncementId?: string;
   bidCount?: number;
   color?: string;
@@ -60,6 +60,17 @@ export interface LotData {
   imageUrls?: string[];
   videoUrl?: string;
   documentUrls?: string[];
+  documents?: Array<{ url: string; label?: string; documentType?: string }>;
+  neighborhood?: string;
+  neighborhoodNormalized?: string;
+  postalCode?: string;
+  propertyType?: string;
+  occupancyStatus?: string;
+  totalAreaM2?: number;
+  privateAreaM2?: number;
+  latitude?: number;
+  longitude?: number;
+  acceptsFinancing?: boolean;
   bidHistory?: BidHistoryEntry[];
 }
 

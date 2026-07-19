@@ -20,6 +20,9 @@ export interface AppConfig {
   catalogCollectOnStart: boolean;
   catalogMaxPages: number;
   vipRequestIntervalMs: number;
+  francoRequestIntervalMs: number;
+  alessandroRequestIntervalMs: number;
+  alvaroRequestIntervalMs: number;
   postgresUrl: string;
   minioEndpoint: string;
   minioPort: number;
@@ -102,6 +105,9 @@ export const config: AppConfig = {
   catalogCollectOnStart: parseBoolean(process.env.CATALOG_COLLECT_ON_START, false),
   catalogMaxPages: parsePositiveInt(process.env.CATALOG_MAX_PAGES, 60),
   vipRequestIntervalMs: parsePositiveInt(process.env.VIP_REQUEST_INTERVAL_MS, 750),
+  francoRequestIntervalMs: parsePositiveInt(process.env.FRANCO_REQUEST_INTERVAL_MS, 750),
+  alessandroRequestIntervalMs: parsePositiveInt(process.env.ALESSANDRO_REQUEST_INTERVAL_MS, 750),
+  alvaroRequestIntervalMs: parsePositiveInt(process.env.ALVARO_REQUEST_INTERVAL_MS, 750),
   postgresUrl: process.env.POSTGRES_URL ?? 'postgresql://auction:auction@localhost:5432/auction_monitor',
   minioEndpoint: process.env.MINIO_ENDPOINT ?? 'localhost',
   minioPort: parsePositiveInt(process.env.MINIO_PORT, 9000),

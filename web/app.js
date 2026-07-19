@@ -1,18 +1,19 @@
 const facetConfig = [
-  { key: 'site', param: 'site', label: 'Site de origem', open: true },
-  { key: 'assetType', param: 'assetType', label: 'Tipo de veículo', open: true },
-  { key: 'brand', param: 'brand', label: 'Marca', open: true, searchable: true },
-  { key: 'model', param: 'model', label: 'Modelo', open: true, searchable: true },
-  { key: 'year', param: 'year', label: 'Ano', open: true },
+  { key: 'site', param: 'site', label: 'Origem', open: true },
+  { key: 'propertyType', param: 'propertyType', label: 'Tipo de imóvel', open: true, searchable: true, catalog: 'real_estate' },
+  { key: 'brand', param: 'brand', label: 'Marca', open: true, searchable: true, catalog: 'vehicles' },
+  { key: 'model', param: 'model', label: 'Modelo', open: true, searchable: true, catalog: 'vehicles' },
+  { key: 'year', param: 'year', label: 'Ano', open: true, catalog: 'vehicles' },
   { key: 'status', param: 'status', label: 'Status', open: true },
   { key: 'state', param: 'state', label: 'Estado' },
   { key: 'city', param: 'city', label: 'Cidade', searchable: true },
-  { key: 'origin', param: 'origin', label: 'Procedência', searchable: true },
+  { key: 'neighborhood', param: 'neighborhood', label: 'Bairro', searchable: true, catalog: 'real_estate' },
+  { key: 'origin', param: 'origin', label: 'Procedência', searchable: true, catalog: 'vehicles' },
   { key: 'consignor', param: 'consignor', label: 'Comitente', searchable: true },
   { key: 'classification', param: 'classification', label: 'Classificação', searchable: true },
-  { key: 'fuel', param: 'fuel', label: 'Combustível', searchable: true },
-  { key: 'transmission', param: 'transmission', label: 'Câmbio', searchable: true },
-  { key: 'runningAtEntry', param: 'runningAtEntry', label: 'Funcionando na entrada' },
+  { key: 'fuel', param: 'fuel', label: 'Combustível', searchable: true, catalog: 'vehicles' },
+  { key: 'transmission', param: 'transmission', label: 'Câmbio', searchable: true, catalog: 'vehicles' },
+  { key: 'runningAtEntry', param: 'runningAtEntry', label: 'Funcionando na entrada', catalog: 'vehicles' },
   { key: 'event', param: 'event', label: 'Evento', searchable: true },
 ];
 
@@ -20,6 +21,7 @@ const state = {
   page: 1,
   pageSize: 24,
   total: 0,
+  catalog: 'vehicles',
   search: '',
   eventDateFrom: '',
   eventDateTo: '',
@@ -78,10 +80,10 @@ function bindEvents() {
     applyState();
   });
   byId('source-nav').addEventListener('click', (event) => {
-    const button = event.target.closest('[data-source]');
+    const button = event.target.closest('[data-catalog]');
     if (!button) return;
-    state.filters.site = button.dataset.source ? [button.dataset.source] : [];
-    state.filters.event = [];
+    state.catalog = button.dataset.catalog;
+    state.filters = Object.fromEntries(facetConfig.map((facet) => [facet.key, []]));
     state.page = 1;
     applyState();
   });
@@ -178,10 +180,9 @@ async function loadDashboard() {
 }
 
 async function loadSourceNav() {
-  const sites = await api('/api/sites');
-  byId('source-nav').innerHTML = '<button class="source-tab" type="button" data-source="">Todos os sites</button>' + sites.map((site) =>
-    `<button class="source-tab" type="button" data-source="${escapeAttr(site.site)}">${escapeHtml(siteLabel(site.site))}<small>${number(site.lotCount)}</small></button>`
-  ).join('');
+  const counts = Object.fromEntries((await api('/api/catalogs')).map((item) => [item.catalog, item.lotCount]));
+  byId('source-nav').innerHTML = [['vehicles', 'Veículos'], ['real_estate', 'Imóveis']]
+    .map(([catalog, label]) => `<button class="source-tab" type="button" data-catalog="${catalog}">${label}<small>${number(counts[catalog] || 0)}</small></button>`).join('');
   reflectStateInControls();
 }
 
@@ -220,7 +221,7 @@ async function refreshCatalog(updateUrl = true) {
     renderLots(lotData);
   } catch (error) {
     if (sequence !== state.requestSequence) return;
-    byId('lot-list').innerHTML = `<div class="request-error">Não foi possível carregar os veículos. ${escapeHtml(error.message)}</div>`;
+    byId('lot-list').innerHTML = `<div class="request-error">Não foi possível carregar os bens. ${escapeHtml(error.message)}</div>`;
   } finally {
     if (sequence === state.requestSequence) byId('lot-list').classList.remove('loading');
   }
@@ -299,7 +300,7 @@ function renderFacets() {
         end: document.activeElement.selectionEnd,
       }
     : null;
-  byId('facet-list').innerHTML = facetConfig.map((config) => {
+  byId('facet-list').innerHTML = facetConfig.filter((config) => !config.catalog || config.catalog === state.catalog).map((config) => {
     const selected = state.filters[config.key] || [];
     const sourceOptions = [...new Map((state.facets[config.key] || []).map((option) => {
       const value = String(option.value).trim();
@@ -404,7 +405,7 @@ function renderActiveFilters() {
 
 function renderLots(data) {
   const totalPages = Math.max(1, Math.ceil(data.total / state.pageSize));
-  byId('result-count').textContent = `${number(data.total)} ${data.total === 1 ? 'veículo encontrado' : 'veículos encontrados'}`;
+  byId('result-count').textContent = `${number(data.total)} ${data.total === 1 ? 'bem encontrado' : 'bens encontrados'}`;
   byId('page-label').textContent = `Página ${state.page} de ${totalPages}`;
   byId('pagination-label').textContent = `${state.page} / ${totalPages}`;
   byId('previous-page').disabled = state.page <= 1;
@@ -424,11 +425,14 @@ function lotCard(lot) {
   const location = [lot.city, lot.state].filter(Boolean).join(' / ') || 'Local não informado';
   const year = [lot.manufactureYear, lot.modelYear].filter(Boolean).join(' / ') || '-';
   const status = lot.businessStatus || businessStateLabel(lot.businessState);
+  const facts = lot.assetType === 'real_estate'
+    ? `<dl class="vehicle-facts"><div><dt>Tipo</dt><dd>${escapeHtml(lot.propertyType || 'Imóvel')}</dd></div><div><dt>Área</dt><dd>${areaLabel(lot.privateAreaM2 || lot.totalAreaM2)}</dd></div><div><dt>Local</dt><dd>${escapeHtml([lot.neighborhood, location].filter(Boolean).join(' · '))}</dd></div></dl>`
+    : `<dl class="vehicle-facts"><div><dt>Ano</dt><dd>${escapeHtml(year)}</dd></div><div><dt>KM</dt><dd>${lot.mileage == null ? '-' : number(lot.mileage)}</dd></div><div><dt>Local</dt><dd>${escapeHtml(location)}</dd></div></dl>`;
   return `<article class="lot-card" tabindex="0" data-lot-id="${lot.id}">
     <figure>${image}<span class="status-badge status-${escapeAttr(lot.businessState || 'other')}">${escapeHtml(status)}</span><span class="source-badge">${escapeHtml(siteLabel(lot.site))}</span></figure>
     <div class="lot-card-body">
       <div class="lot-identity"><span>${escapeHtml(assetTypeLabel(lot.assetType))} · Lote ${escapeHtml(lot.lotNumber || '-')} · ${number(lot.imageCount)} fotos</span><h2>${escapeHtml(lot.title)}</h2><small>${escapeHtml(lot.eventName || 'Evento não identificado')}</small></div>
-      <dl class="vehicle-facts"><div><dt>Ano</dt><dd>${escapeHtml(year)}</dd></div><div><dt>KM</dt><dd>${lot.mileage == null ? '-' : number(lot.mileage)}</dd></div><div><dt>Local</dt><dd>${escapeHtml(location)}</dd></div></dl>
+      ${facts}
       <div class="bid-block"><span>Lance atual</span><strong>${currency(lot.currentBid)}</strong><small>${endingText(lot.auctionEnd)}</small></div>
     </div>
   </article>`;
@@ -484,12 +488,12 @@ function reflectStateInControls() {
   byId('list-view').classList.toggle('active', state.view === 'list');
   byId('sort-select').value = state.sort;
   byId('page-size-select').value = String(state.pageSize);
-  const source = state.filters.site.length === 1 ? state.filters.site[0] : '';
-  document.querySelectorAll('[data-source]').forEach((button) => button.classList.toggle('active', button.dataset.source === source));
+  document.querySelectorAll('[data-catalog]').forEach((button) => button.classList.toggle('active', button.dataset.catalog === state.catalog));
 }
 
 function hydrateStateFromUrl() {
   const params = new URLSearchParams(location.search);
+  state.catalog = params.get('catalog') === 'real_estate' ? 'real_estate' : 'vehicles';
   state.search = params.get('search') || '';
   state.eventDateFrom = validDateValue(params.get('eventDateFrom'));
   state.eventDateTo = validDateValue(params.get('eventDateTo'));
@@ -504,6 +508,9 @@ function hydrateStateFromUrl() {
 
 function buildParams(includePage) {
   const params = new URLSearchParams();
+  params.set('catalog', state.catalog);
+  (state.catalog === 'real_estate' ? ['real_estate'] : ['car', 'motorcycle', 'heavy'])
+    .forEach((value) => params.append('assetType', value));
   if (state.search) params.set('search', state.search);
   if (state.eventDateFrom) params.set('eventDateFrom', state.eventDateFrom);
   if (state.eventDateTo) params.set('eventDateTo', state.eventDateTo);
@@ -559,7 +566,8 @@ async function openLot(id) {
     ['Trava', lot.locks],
     ['Vidro', lot.windows],
   ];
-  const equipmentSection = equipment.some(([, value]) => hasCollectedValue(value))
+  const isRealEstate = lot.asset_type === 'real_estate';
+  const equipmentSection = !isRealEstate && equipment.some(([, value]) => hasCollectedValue(value))
     ? `<section class="detail-section"><h3>Equipamentos e características</h3><div class="detail-grid compact">${equipment.map(([label, value]) => detailCell(label, value || '-')).join('')}</div></section>`
     : '';
   const rawData = typeof lot.raw_data_json === 'string' ? JSON.parse(lot.raw_data_json) : (lot.raw_data_json || {});
@@ -568,8 +576,20 @@ async function openLot(id) {
     ? `<section class="detail-section"><h3>Vistoria e opcionais</h3><div class="detail-grid compact">${additionalDetails.map(([label, value]) => detailCell(label, value)).join('')}</div></section>`
     : '';
   const documentsSection = documents.length
-    ? `<section class="detail-section"><h3>Documentos</h3><div class="document-list">${documents.map((document, index) => `<a href="${escapeAttr(mediaUrl(document))}" target="_blank" rel="noopener"><span>Documento ${index + 1}</span><strong>${escapeHtml(fileTypeLabel(document.sourceUrl))}</strong></a>`).join('')}</div></section>`
+    ? `<section class="detail-section"><h3>Documentos</h3><div class="document-list">${documents.map((document, index) => `<a href="${escapeAttr(mediaUrl(document))}" target="_blank" rel="noopener"><span>${escapeHtml(document.label || `Documento ${index + 1}`)}</span><strong>${escapeHtml(documentTypeLabel(document.documentType) || fileTypeLabel(document.sourceUrl))}</strong></a>`).join('')}</div></section>`
     : '';
+  const lotDetails = isRealEstate
+    ? `${detailCell('Imóvel', lot.title, 'wide')}${detailCell('Tipo', lot.property_type || 'Imóvel')}${detailCell('Código', lot.external_code || '-')}
+      ${detailCell('Lote', lot.lot_number || '-')}${detailCell('Área privativa', areaLabel(lot.private_area_m2))}${detailCell('Área total', areaLabel(lot.total_area_m2))}
+      ${detailCell('Ocupação', lot.occupancy_status || '-')}${detailCell('Aceita financiamento', booleanLabel(lot.accepts_financing))}${detailCell('CEP', lot.postal_code || '-')}
+      ${detailCell('Comitente', lot.consignor || '-', 'wide')}${detailCell('Bairro', lot.neighborhood || '-')}
+      ${detailCell('Localização', lot.address || [lot.city, lot.state].filter(Boolean).join(' / ') || '-', 'wide')}`
+    : `${detailCell('Veículo', lot.title, 'wide')}${detailCell('Tipo', assetTypeLabel(lot.asset_type))}${detailCell('Código', lot.external_code || '-')}
+      ${detailCell('Lote', lot.lot_number || '-')}${detailCell('Ano', [lot.manufacture_year, lot.model_year].filter(Boolean).join(' / ') || '-')}${detailCell('Cor', lot.color || '-')}${detailCell('Combustível', lot.fuel || '-')}
+      ${detailCell('KM', lot.mileage == null ? '-' : number(lot.mileage))}
+      ${detailCell('Funcionando na entrada', booleanLabel(lot.running_at_entry))}${detailCell('Final da placa', [lot.plate_final, lot.plate_state].filter(Boolean).join(' - ') || '-')}
+      ${detailCell('Comitente', lot.consignor || '-', 'wide')}${detailCell('Procedência', lot.origin || '-', 'wide')}
+      ${detailCell('Localização', lot.address || [lot.city, lot.state].filter(Boolean).join(' / ') || '-', 'wide')}`;
   byId('lot-detail').innerHTML = `${gallery}<div class="detail-content">
     <div class="detail-heading"><div><span>${escapeHtml(siteLabel(lot.site))} · Lote ${escapeHtml(lot.lot_number || '-')}</span><h2>${escapeHtml(lot.title)}</h2><p>${escapeHtml(lot.event_name || '')}</p></div><strong>${currency(lot.current_bid)}</strong></div>
     <div class="detail-grid">
@@ -577,12 +597,7 @@ async function openLot(id) {
       ${detailCell('Custo total', currency(lot.total_cost))}${detailCell('Encerramento', dateTime(lot.auction_end))}
     </div>
     <section class="detail-section"><h3>Detalhes do lote</h3><div class="detail-grid lot-details">
-      ${detailCell('Veículo', lot.title, 'wide')}${detailCell('Tipo', assetTypeLabel(lot.asset_type))}${detailCell('Código', lot.external_code || '-')}
-      ${detailCell('Lote', lot.lot_number || '-')}${detailCell('Ano', [lot.manufacture_year, lot.model_year].filter(Boolean).join(' / ') || '-')}${detailCell('Cor', lot.color || '-')}${detailCell('Combustível', lot.fuel || '-')}
-      ${detailCell('KM', lot.mileage == null ? '-' : number(lot.mileage))}
-      ${detailCell('Funcionando na entrada', booleanLabel(lot.running_at_entry))}${detailCell('Final da placa', [lot.plate_final, lot.plate_state].filter(Boolean).join(' - ') || '-')}
-      ${detailCell('Comitente', lot.consignor || '-', 'wide')}${detailCell('Procedência', lot.origin || '-', 'wide')}
-      ${detailCell('Localização', lot.address || [lot.city, lot.state].filter(Boolean).join(' / ') || '-', 'wide')}
+      ${lotDetails}
     </div></section>
     ${equipmentSection}
     ${additionalDetailsSection}
@@ -794,6 +809,7 @@ function facetLabel(key, value) {
   if (key === 'assetType') return assetTypeLabel(value);
   if (key === 'status') return businessStateLabel(value);
   if (key === 'runningAtEntry') return value === 'yes' ? 'Sim' : 'Não';
+  if (key === 'propertyType') return String(value).replace(/(^|\s)\S/g, (letter) => letter.toUpperCase());
   return value;
 }
 
@@ -862,7 +878,9 @@ function number(value) { return new Intl.NumberFormat('pt-BR').format(Number(val
 function dateTime(value) { return value ? new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short', timeStyle: 'short' }).format(new Date(value)) : '-'; }
 function fileSize(value) { return new Intl.NumberFormat('pt-BR', { style: 'unit', unit: 'megabyte', maximumFractionDigits: 1 }).format(Number(value || 0) / 1024 / 1024); }
 function mediaUrl(item) { return item.downloadStatus === 'downloaded' ? `/api/media/${item.id}` : item.sourceUrl; }
-function siteLabel(site) { return ({ leilo: 'Leilo', vipleiloes: 'VIP Leilões', superbid: 'Superbid' })[site] || site || '-'; }
-function assetTypeLabel(value) { return ({ car: 'Carro', motorcycle: 'Moto', heavy: 'Pesado' })[value] || 'Veículo'; }
+function siteLabel(site) { return ({ leilo: 'Leilo', vipleiloes: 'VIP Leilões', superbid: 'Superbid', francoleiloes: 'Franco Leilões', alessandroteixeira: 'Alessandro Teixeira Leilões', alvaroleiloes: 'Álvaro Leilões' })[site] || site || '-'; }
+function areaLabel(value) { return value == null || value === '' ? '-' : `${number(value)} m²`; }
+function documentTypeLabel(type) { return ({ matricula: 'Matrícula', edital: 'Edital', condicoes: 'Condições', laudo: 'Laudo', outro: 'Documento' })[type] || ''; }
+function assetTypeLabel(value) { return ({ car: 'Carro', motorcycle: 'Moto', heavy: 'Pesado', real_estate: 'Imóvel' })[value] || 'Bem'; }
 function escapeHtml(value) { return String(value ?? '').replace(/[&<>'"]/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' })[char]); }
 function escapeAttr(value) { return escapeHtml(value); }

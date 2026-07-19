@@ -2,6 +2,8 @@
 # defined by docker-compose.yml, matching the production/Portainer stack.
 services:
   postgres:
+    ports: !override
+      - "5433:5432"
     volumes: !override
       - postgres-data:/var/lib/postgresql/data
 
@@ -11,6 +13,8 @@ services:
 
   dashboard:
     build: .
+    ports: !override
+      - "3001:3000"
     labels:
       - com.centurylinklabs.watchtower.enable=false
 

@@ -204,6 +204,47 @@ export async function runPostgresMigrations(pool: Pool): Promise<void> {
     ALTER TABLE lot_media ADD COLUMN IF NOT EXISTS optimized_at TIMESTAMPTZ;
     ALTER TABLE lot_media ADD COLUMN IF NOT EXISTS optimization_attempts INTEGER NOT NULL DEFAULT 0;
     ALTER TABLE lot_media ADD COLUMN IF NOT EXISTS optimization_error TEXT;
+    ALTER TABLE lot_media ADD COLUMN IF NOT EXISTS label TEXT;
+    ALTER TABLE lot_media ADD COLUMN IF NOT EXISTS document_type TEXT;
+    ALTER TABLE lot_media ADD COLUMN IF NOT EXISTS storage_provider TEXT NOT NULL DEFAULT 'oracle-minio';
+    ALTER TABLE lot_media ADD COLUMN IF NOT EXISTS storage_tier TEXT NOT NULL DEFAULT 'hot';
+    ALTER TABLE lot_media ADD COLUMN IF NOT EXISTS storage_bucket TEXT;
+    ALTER TABLE lot_media ADD COLUMN IF NOT EXISTS archived_at TIMESTAMPTZ;
+    ALTER TABLE lot_media ADD COLUMN IF NOT EXISTS last_accessed_at TIMESTAMPTZ;
+
+    CREATE TABLE IF NOT EXISTS real_estate_details (
+      market_lot_id BIGINT PRIMARY KEY REFERENCES market_lots(id) ON DELETE CASCADE,
+      state_code TEXT,
+      city_code TEXT,
+      neighborhood TEXT,
+      neighborhood_normalized TEXT,
+      postal_code TEXT,
+      property_type TEXT,
+      occupancy_status TEXT,
+      total_area_m2 NUMERIC(14,2),
+      private_area_m2 NUMERIC(14,2),
+      latitude DOUBLE PRECISION,
+      longitude DOUBLE PRECISION,
+      accepts_financing BOOLEAN,
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+
+    CREATE TABLE IF NOT EXISTS storage_migrations (
+      id BIGSERIAL PRIMARY KEY,
+      lot_media_id BIGINT NOT NULL REFERENCES lot_media(id) ON DELETE CASCADE,
+      from_provider TEXT NOT NULL,
+      from_tier TEXT NOT NULL,
+      to_provider TEXT NOT NULL,
+      to_tier TEXT NOT NULL,
+      status TEXT NOT NULL,
+      source_key TEXT,
+      destination_key TEXT,
+      expected_hash TEXT,
+      verified_hash TEXT,
+      error TEXT,
+      started_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      finished_at TIMESTAMPTZ
+    );
 
     CREATE TABLE IF NOT EXISTS lot_bid_history (
       id BIGSERIAL PRIMARY KEY,
@@ -271,6 +312,10 @@ export async function runPostgresMigrations(pool: Pool): Promise<void> {
     CREATE INDEX IF NOT EXISTS idx_change_log_lot_time ON lot_change_log (market_lot_id, observed_at DESC);
     CREATE INDEX IF NOT EXISTS idx_lot_media_pending ON lot_media (download_status, download_attempts, id);
     CREATE INDEX IF NOT EXISTS idx_lot_media_hash ON lot_media (content_hash);
+    CREATE INDEX IF NOT EXISTS idx_lot_media_storage_tier ON lot_media (storage_provider,storage_tier,last_accessed_at);
+    CREATE INDEX IF NOT EXISTS idx_real_estate_location ON real_estate_details (state_code,city_code,neighborhood_normalized);
+    CREATE INDEX IF NOT EXISTS idx_real_estate_type ON real_estate_details (property_type,occupancy_status,accepts_financing);
+    CREATE INDEX IF NOT EXISTS idx_storage_migrations_status ON storage_migrations (status,started_at);
     CREATE INDEX IF NOT EXISTS idx_lot_media_optimization ON lot_media (optimization_profile, optimization_attempts, id)
       WHERE type='image' AND download_status='downloaded';
     CREATE INDEX IF NOT EXISTS idx_bid_history_lot_time ON lot_bid_history (market_lot_id, observed_at DESC);

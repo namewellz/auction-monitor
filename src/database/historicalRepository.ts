@@ -17,6 +17,19 @@ export interface PendingMedia {
   downloadAttempts: number;
 }
 
+export interface PendingDocument extends PendingMedia {
+  label?: string;
+  documentType?: string;
+}
+
+export interface StoredDocumentMetadata {
+  storageKey: string;
+  contentHash: string;
+  contentType: string;
+  sizeBytes: number;
+  etag?: string;
+}
+
 export interface OptimizableMedia {
   id: number;
   sourceUrl: string;
@@ -137,6 +150,7 @@ export class HistoricalRepository {
       const snapshotInserted = await this.insertSnapshot(client, marketLotId, data, now, snapshotHash, rawDataJson);
       await this.insertChangeLog(client, marketLotId, previous, data, now, snapshotHash);
       await this.upsertMedia(client, marketLotId, data, now);
+      await this.upsertRealEstateDetails(client, marketLotId, data);
       await this.upsertBidHistory(client, marketLotId, data);
       await client.query('COMMIT');
       return {
@@ -261,6 +275,7 @@ export class HistoricalRepository {
       `UPDATE lot_media SET storage_key=$1,content_hash=$2,content_type=$3,size_bytes=$4,etag=$5,
        original_size_bytes=$6,image_width=$7,image_height=$8,optimization_profile=$9,optimized_at=NOW(),
        optimization_attempts=optimization_attempts+1,optimization_error=NULL,
+       storage_provider='oracle-minio',storage_tier='hot',
        download_status='downloaded',download_attempts=download_attempts+1,download_error=NULL,downloaded_at=NOW()
        WHERE id=$10`,
       [media.storageKey, media.contentHash, media.contentType, media.sizeBytes, media.etag ?? null,
@@ -323,7 +338,8 @@ export class HistoricalRepository {
   public async getMedia(id: number): Promise<StoredMedia | undefined> {
     const result = await this.pool.query<{
       id: string; storage_key: string | null; source_url: string; download_status: string; content_type: string | null;
-    }>('SELECT id,storage_key,source_url,download_status,content_type FROM lot_media WHERE id=$1', [id]);
+    }>(`UPDATE lot_media SET last_accessed_at=NOW() WHERE id=$1
+        RETURNING id,storage_key,source_url,download_status,content_type`, [id]);
     const row = result.rows[0];
     if (!row) return undefined;
     return {
@@ -368,6 +384,33 @@ export class HistoricalRepository {
         data.auctionEnd, hash, rawDataJson],
     );
     return (result.rowCount ?? 0) > 0;
+  }
+
+  public async listPendingDocuments(limit: number): Promise<PendingDocument[]> {
+    const result = await this.pool.query<{
+      id: string; source_url: string; download_attempts: number; label: string | null; document_type: string | null;
+    }>(
+      `SELECT id,source_url,download_attempts,label,document_type FROM lot_media
+       WHERE type='document' AND download_status IN ('pending','failed','metadata_only') AND download_attempts<4
+       ORDER BY id LIMIT $1`,
+      [limit],
+    );
+    return result.rows.map((row) => ({
+      id: Number(row.id), sourceUrl: row.source_url, downloadAttempts: row.download_attempts,
+      ...(row.label ? { label: row.label } : {}),
+      ...(row.document_type ? { documentType: row.document_type } : {}),
+    }));
+  }
+
+  public async markDocumentDownloaded(id: number, document: StoredDocumentMetadata, bucket: string): Promise<void> {
+    await this.pool.query(
+      `UPDATE lot_media SET storage_key=$1,content_hash=$2,content_type=$3,size_bytes=$4,etag=$5,
+       original_size_bytes=$4,storage_provider='oracle-minio',storage_tier='hot',storage_bucket=$6,
+       download_status='downloaded',download_attempts=download_attempts+1,download_error=NULL,downloaded_at=NOW()
+       WHERE id=$7`,
+      [document.storageKey, document.contentHash, document.contentType, document.sizeBytes,
+        document.etag ?? null, bucket, id],
+    );
   }
 
   private async insertChangeLog(
@@ -449,14 +492,38 @@ export class HistoricalRepository {
         [marketLotId, data.videoUrl, observedAt],
       );
     }
-    for (const [position, sourceUrl] of (data.documentUrls ?? []).entries()) {
+    const documents: NonNullable<LotData['documents']> =
+      data.documents ?? (data.documentUrls ?? []).map((url) => ({ url }));
+    for (const [position, document] of documents.entries()) {
       await client.query(
-        `INSERT INTO lot_media (market_lot_id,type,source_url,position,download_status,first_seen_at,last_seen_at)
-         VALUES ($1,'document',$2,$3,'metadata_only',$4,$4) ON CONFLICT(market_lot_id,source_url) DO UPDATE SET
-         position=EXCLUDED.position,last_seen_at=EXCLUDED.last_seen_at`,
-        [marketLotId, sourceUrl, position, observedAt],
+        `INSERT INTO lot_media (market_lot_id,type,source_url,position,label,document_type,download_status,first_seen_at,last_seen_at)
+         VALUES ($1,'document',$2,$3,$4,$5,'pending',$6,$6) ON CONFLICT(market_lot_id,source_url) DO UPDATE SET
+         position=EXCLUDED.position,label=COALESCE(EXCLUDED.label,lot_media.label),
+         document_type=COALESCE(EXCLUDED.document_type,lot_media.document_type),last_seen_at=EXCLUDED.last_seen_at`,
+        [marketLotId, document.url, position, document.label ?? null, document.documentType ?? null, observedAt],
       );
     }
+  }
+
+  private async upsertRealEstateDetails(client: PoolClient, marketLotId: number, data: LotData): Promise<void> {
+    if (data.assetType !== 'real_estate') return;
+    await client.query(
+      `INSERT INTO real_estate_details (
+        market_lot_id,state_code,city_code,neighborhood,neighborhood_normalized,postal_code,
+        property_type,occupancy_status,total_area_m2,private_area_m2,latitude,longitude,accepts_financing,updated_at
+      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,NOW())
+      ON CONFLICT(market_lot_id) DO UPDATE SET
+        state_code=EXCLUDED.state_code,city_code=EXCLUDED.city_code,neighborhood=EXCLUDED.neighborhood,
+        neighborhood_normalized=EXCLUDED.neighborhood_normalized,postal_code=EXCLUDED.postal_code,
+        property_type=EXCLUDED.property_type,occupancy_status=EXCLUDED.occupancy_status,
+        total_area_m2=EXCLUDED.total_area_m2,private_area_m2=EXCLUDED.private_area_m2,
+        latitude=EXCLUDED.latitude,longitude=EXCLUDED.longitude,
+        accepts_financing=EXCLUDED.accepts_financing,updated_at=NOW()`,
+      [marketLotId, data.state, null, data.neighborhood ?? null, data.neighborhoodNormalized ?? null,
+        data.postalCode ?? null, data.propertyType ?? null, data.occupancyStatus ?? null,
+        data.totalAreaM2 ?? null, data.privateAreaM2 ?? null, data.latitude ?? null,
+        data.longitude ?? null, data.acceptsFinancing ?? null],
+    );
   }
 
   private async upsertBidHistory(client: PoolClient, marketLotId: number, data: LotData): Promise<void> {

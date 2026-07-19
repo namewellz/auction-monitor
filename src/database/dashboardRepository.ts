@@ -11,6 +11,8 @@ export interface DashboardFilters {
   years?: number[];
   states?: string[];
   cities?: string[];
+  neighborhoods?: string[];
+  propertyTypes?: string[];
   origins?: string[];
   consignors?: string[];
   classifications?: string[];
@@ -27,7 +29,7 @@ export interface DashboardFilters {
 export type LotSort = 'auction_desc' | 'auction_asc' | 'year_desc' | 'year_asc' | 'brand_asc' | 'brand_desc';
 
 export type LotFacetKey = 'site' | 'assetType' | 'event' | 'status' | 'brand' | 'model' | 'year' | 'state' |
-  'city' | 'origin' | 'consignor' | 'classification' | 'fuel' | 'transmission' | 'runningAtEntry';
+  'city' | 'neighborhood' | 'propertyType' | 'origin' | 'consignor' | 'classification' | 'fuel' | 'transmission' | 'runningAtEntry';
 
 export interface LotFacetOption {
   value: string;
@@ -114,6 +116,14 @@ function buildLotWhere(filters: DashboardFilters, omittedFacet?: LotFacetKey): {
   addList('year', 'ml.model_year', filters.years, 'int');
   addList('state', 'ml.state', filters.states);
   addList('city', 'ml.city', filters.cities);
+  if (omittedFacet !== 'neighborhood' && filters.neighborhoods?.length) {
+    conditions.push(`EXISTS (SELECT 1 FROM real_estate_details red WHERE red.market_lot_id=ml.id
+      AND red.neighborhood_normalized = ANY(${addParam(filters.neighborhoods)}::text[]))`);
+  }
+  if (omittedFacet !== 'propertyType' && filters.propertyTypes?.length) {
+    conditions.push(`EXISTS (SELECT 1 FROM real_estate_details red WHERE red.market_lot_id=ml.id
+      AND red.property_type = ANY(${addParam(filters.propertyTypes)}::text[]))`);
+  }
   addList('origin', 'ml.origin', filters.origins);
   addList('consignor', 'ml.consignor', filters.consignors);
   addList('classification', 'ml.classification', filters.classifications);
@@ -176,6 +186,36 @@ export class DashboardRepository {
     return result.rows;
   }
 
+  public async catalogs(): Promise<unknown[]> {
+    const result = await this.pool.query(`
+      SELECT CASE WHEN asset_type='real_estate' THEN 'real_estate' ELSE 'vehicles' END AS catalog,
+        COUNT(*)::int AS "lotCount"
+      FROM market_lots
+      GROUP BY CASE WHEN asset_type='real_estate' THEN 'real_estate' ELSE 'vehicles' END
+      ORDER BY catalog
+    `);
+    return result.rows;
+  }
+
+  public async storageStats(): Promise<unknown> {
+    const [objects, migrations] = await Promise.all([
+      this.pool.query(`
+        SELECT type, storage_provider AS "storageProvider", storage_tier AS "storageTier",
+          COUNT(*)::int AS "objectCount", COALESCE(SUM(size_bytes),0)::bigint AS "sizeBytes",
+          MIN(first_seen_at) AS "oldestObject", MAX(last_accessed_at) AS "lastAccess"
+        FROM lot_media
+        WHERE download_status='downloaded'
+        GROUP BY type, storage_provider, storage_tier
+        ORDER BY storage_tier, type
+      `),
+      this.pool.query(`
+        SELECT status, COUNT(*)::int AS count
+        FROM storage_migrations GROUP BY status ORDER BY status
+      `),
+    ]);
+    return { objects: objects.rows, migrations: migrations.rows };
+  }
+
   public async collectionRuns(site?: string, limit = 10): Promise<unknown[]> {
     const result = await this.pool.query(`
       SELECT cr.id::int, COALESCE(cr.site, cs.site) AS site,
@@ -232,6 +272,9 @@ export class DashboardRepository {
         ml.total_cost::float AS "totalCost", ml.auction_start AS "auctionStart",
         ml.auction_end AS "auctionEnd", ml.sold_at AS "soldAt", ml.last_seen_at AS "lastSeenAt",
         ae.id::int AS "eventId", ae.name AS "eventName",
+        red.neighborhood, red.property_type AS "propertyType", red.occupancy_status AS "occupancyStatus",
+        red.total_area_m2::float AS "totalAreaM2", red.private_area_m2::float AS "privateAreaM2",
+        red.accepts_financing AS "acceptsFinancing",
         (SELECT id::int FROM lot_media WHERE market_lot_id=ml.id AND type='image' AND download_status='downloaded' ORDER BY position LIMIT 1) AS "primaryMediaId",
         (SELECT source_url FROM lot_media WHERE market_lot_id=ml.id AND type='image' ORDER BY position LIMIT 1) AS "primarySourceUrl",
         (SELECT COUNT(*)::int FROM lot_media WHERE market_lot_id=ml.id AND type='image') AS "imageCount",
@@ -240,6 +283,7 @@ export class DashboardRepository {
         (SELECT COUNT(*)::int FROM lot_change_log WHERE market_lot_id=ml.id) AS "changeCount"
       FROM market_lots ml
       LEFT JOIN auction_events ae ON ae.id = ml.event_id
+      LEFT JOIN real_estate_details red ON red.market_lot_id = ml.id
       WHERE ${where}
       ORDER BY ${lotOrderBy(filters.sort)}
       LIMIT ${limit} OFFSET ${offset}
@@ -262,6 +306,9 @@ export class DashboardRepository {
       { key: 'year', value: 'ml.model_year::text', orderBy: 'value::int DESC' },
       { key: 'state', value: 'ml.state' },
       { key: 'city', value: 'ml.city', limit: 500 },
+      { key: 'neighborhood', value: '(SELECT red.neighborhood_normalized FROM real_estate_details red WHERE red.market_lot_id=ml.id)',
+        label: "(SELECT red.neighborhood FROM real_estate_details red WHERE red.market_lot_id=ml.id)", limit: 1000 },
+      { key: 'propertyType', value: '(SELECT red.property_type FROM real_estate_details red WHERE red.market_lot_id=ml.id)', limit: 500 },
       { key: 'origin', value: 'ml.origin', limit: 500 },
       { key: 'consignor', value: 'ml.consignor', limit: 1000 },
       { key: 'classification', value: 'ml.classification' },
@@ -315,9 +362,12 @@ export class DashboardRepository {
       SELECT ml.*, ${businessStatusSql('ml')} AS "businessStatus",
         ml.current_bid::float, ml.next_bid::float, ml.final_bid::float,
         ml.commission_fee::float, ml.buyer_fee::float, ml.other_fees::float, ml.total_cost::float,
-        ae.name AS event_name
+        ae.name AS event_name, red.neighborhood, red.postal_code, red.property_type,
+        red.occupancy_status, red.total_area_m2::float, red.private_area_m2::float,
+        red.latitude, red.longitude, red.accepts_financing
       FROM market_lots ml
       LEFT JOIN auction_events ae ON ae.id = ml.event_id
+      LEFT JOIN real_estate_details red ON red.market_lot_id = ml.id
       WHERE ml.id=$1
     `, [id]);
     const lot = result.rows[0];
@@ -325,7 +375,9 @@ export class DashboardRepository {
 
     const [media, snapshots, changes, bids] = await Promise.all([
       this.pool.query(`
-        SELECT id::int, type, source_url AS "sourceUrl", position, download_status AS "downloadStatus"
+        SELECT id::int, type, source_url AS "sourceUrl", position, label,
+          document_type AS "documentType",download_status AS "downloadStatus",
+          storage_provider AS "storageProvider",storage_tier AS "storageTier"
         FROM lot_media WHERE market_lot_id=$1 ORDER BY type, position
       `, [id]),
       this.pool.query(`

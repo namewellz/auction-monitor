@@ -10,6 +10,8 @@
     "collector:start": "node dist/collector.js",
     "collect:url": "tsx src/tools/collectUrl.ts",
     "collect:leilo-event": "tsx src/tools/collectLeiloEvent.ts",
+    "discover:real-estate-auctioneers": "tsx src/tools/discoverRealEstateAuctioneers.ts",
+    "collect:franco-real-estate": "tsx src/tools/collectFrancoRealEstate.ts",
     "revalidate:site": "tsx src/tools/revalidateSite.ts",
     "media:optimize": "tsx src/tools/optimizeMedia.ts",
     "leilo:dev": "tsx watch src/leiloApp.ts",

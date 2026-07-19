@@ -113,3 +113,77 @@ O comando pode ser retomado com seguranca: imagens que ja possuem o perfil atual
 ```bash
 docker compose -f docker-compose.scrape.yml run --rm scrape npm run scrape -- <url>
 ```
+
+## Descobrir leiloeiros de imoveis
+
+Este comando percorre o filtro de imoveis de Sao Paulo no Leilao Imovel, salva as
+URLs de anuncios, extrai os dados dos leiloeiros e gera resumos em JSON e CSV:
+
+```bash
+npm run discover:real-estate-auctioneers
+```
+
+Os arquivos ficam em `artifacts/real-estate-auctioneers-sp`. A coleta espera 2,5
+segundos entre requisicoes e pode ser retomada, pois cada anuncio processado e
+salvo imediatamente em `listings.jsonl`.
+
+```bash
+npm run discover:real-estate-auctioneers -- --delay-ms 5000 --max-pages 100 --max-listings 500
+```
+
+Tambem estao disponiveis `--url`, `--output` e `--resume false`. Caso o portal
+apresente a protecao Cloudflare, a execucao para e preserva o progresso, sem
+tentar contornar o bloqueio.
+
+### Franco Leiloes
+
+Coleta diretamente da API publica usada pelo filtro de lotes residenciais da
+Franco Leiloes e gera `lots.json`, `lots.csv`, `lots.raw.json` e `summary.json`:
+
+```bash
+npm run collect:franco-real-estate
+```
+
+Por padrao, usa a categoria 55 (Residenciais), espera 750 ms entre blocos e
+grava os arquivos em `artifacts/franco-real-estate`. Para cada lote, todas as
+fotos e os documentos publicados (edital, matricula, condicoes e outros anexos)
+sao baixados em `lots/<lotId>/photos` e `lots/<lotId>/documents`. O JSON registra
+URL original, caminho local, tipo, tamanho e SHA-256 de cada arquivo. Os parametros
+`--category`, `--delay-ms`, `--download-concurrency` e `--output` permitem alterar
+os valores da coleta. As fotos usam o mesmo perfil dos veiculos: WebP, limite
+padrao de 1280x960 e qualidade 70. O perfil pode ser alterado com
+`MEDIA_IMAGE_MAX_WIDTH`, `MEDIA_IMAGE_MAX_HEIGHT`, `MEDIA_IMAGE_QUALITY` ou pelos
+argumentos equivalentes `--image-max-width`, `--image-max-height` e
+`--image-quality`. Documentos PDF permanecem inalterados.
+
+O provider `francoleiloes` tambem participa da coleta principal do dashboard. Os
+imoveis sao persistidos no mesmo catalogo, com tipo de bem `real_estate`, e os
+filtros incluem estado, cidade e bairro. Fotos continuam sendo convertidas para
+WebP; documentos sao preservados e armazenados no MinIO com tipo, rotulo, hash e
+tamanho. Isso tambem habilita o download dos editais expostos pelos providers de
+veiculos que ja informam `documentUrls`.
+
+## Preparacao para arquivamento de midia
+
+Cada objeto armazenado possui provedor e camada (`hot` ou `archive`), data do
+ultimo acesso e bucket. A tabela `storage_migrations` registra uma futura copia
+para um armazenamento externo com hash esperado e verificado, permitindo o fluxo
+seguro **copiar -> verificar -> trocar referencia -> remover origem**. O endpoint
+`GET /api/storage/stats` resume quantidade e bytes por tipo, provedor e camada.
+
+Esta versao nao transfere nem remove objetos automaticamente: o destino externo,
+credenciais e prazo de retencao ainda precisam ser definidos antes de ativar um
+worker de arquivamento. Assim, a preparacao do banco pode entrar em producao sem
+risco de movimentar os dados atuais do Oracle Cloud.
+
+### Alessandro Teixeira Leiloes
+
+O provider `alessandroteixeira` consulta a API publica do site, percorre todas as
+paginas e importa somente a categoria de imoveis. Registros marcados como teste ou
+simulacao sao ignorados. Fotos sao obtidas em 640x480, convertidas pelo perfil WebP
+comum, e anexos como edital, matricula e laudo sao preservados no MinIO. O intervalo
+entre paginas pode ser configurado com `ALESSANDRO_REQUEST_INTERVAL_MS`.
+
+O provider `alvaroleiloes` reutiliza o mesmo adaptador para o Alvaro Leiloes e pode
+ser regulado com `ALVARO_REQUEST_INTERVAL_MS`. Ele tambem filtra a categoria real de
+imoveis, usa fotos em 640x480 e preserva todos os anexos publicados.

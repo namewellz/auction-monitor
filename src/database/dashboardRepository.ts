@@ -27,7 +27,7 @@ export interface DashboardFilters {
   pageSize: number;
 }
 
-export type LotSort = 'auction_desc' | 'auction_asc' | 'year_desc' | 'year_asc' | 'brand_asc' | 'brand_desc';
+export type LotSort = 'auction_nearest' | 'auction_desc' | 'auction_asc' | 'year_desc' | 'year_asc' | 'brand_asc' | 'brand_desc';
 
 export type LotFacetKey = 'site' | 'assetType' | 'event' | 'status' | 'brand' | 'model' | 'year' | 'state' |
   'city' | 'neighborhood' | 'propertyType' | 'vehicleCondition' | 'origin' | 'consignor' | 'classification' | 'fuel' | 'transmission' | 'runningAtEntry';
@@ -149,12 +149,20 @@ function buildLotWhere(filters: DashboardFilters, omittedFacet?: LotFacetKey): {
 function lotOrderBy(sort: LotSort | undefined): string {
   const lotNumber = "NULLIF(regexp_replace(ml.lot_number, '\\D', '', 'g'), '')::int ASC NULLS LAST";
   switch (sort) {
+    case 'auction_nearest':
+      return `CASE
+        WHEN ml.auction_end >= NOW() THEN 0
+        WHEN ml.auction_end < NOW() THEN 1
+        ELSE 2
+      END ASC,
+      CASE WHEN ml.auction_end >= NOW() THEN ml.auction_end END ASC NULLS LAST,
+      CASE WHEN ml.auction_end < NOW() THEN ml.auction_end END DESC NULLS LAST,${lotNumber}`;
     case 'auction_asc': return `COALESCE(ml.auction_start,ml.auction_end) ASC NULLS LAST,${lotNumber}`;
     case 'year_desc': return `ml.model_year DESC NULLS LAST,ml.manufacture_year DESC NULLS LAST,ml.brand ASC NULLS LAST,ml.model ASC NULLS LAST,${lotNumber}`;
     case 'year_asc': return `ml.model_year ASC NULLS LAST,ml.manufacture_year ASC NULLS LAST,ml.brand ASC NULLS LAST,ml.model ASC NULLS LAST,${lotNumber}`;
     case 'brand_asc': return `ml.brand ASC NULLS LAST,ml.model ASC NULLS LAST,ml.model_year DESC NULLS LAST,${lotNumber}`;
     case 'brand_desc': return `ml.brand DESC NULLS LAST,ml.model DESC NULLS LAST,ml.model_year DESC NULLS LAST,${lotNumber}`;
-    default: return `COALESCE(ml.auction_start,ml.auction_end) DESC NULLS LAST,${lotNumber}`;
+    default: return lotOrderBy('auction_nearest');
   }
 }
 

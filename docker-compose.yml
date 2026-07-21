@@ -39,7 +39,7 @@ services:
       - "${MINIO_CONSOLE_PORT:-9001}:9001"
 
     volumes:
-      - /srv/auction-monitor/minio-data:/data
+      - ${MINIO_DATA_PATH:-/srv/auction-monitor/minio-data}:/data
 
     healthcheck:
       test:
@@ -100,7 +100,7 @@ services:
       SUPERBID_CATALOG_MAX_OFFERS: ${SUPERBID_CATALOG_MAX_OFFERS:-0}
 
     ports:
-      - "${DASHBOARD_PORT:-3000}:3000"
+      - "${DASHBOARD_HOST_PORT:-3000}:${DASHBOARD_PORT:-3000}"
 
     depends_on:
       postgres:

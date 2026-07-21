@@ -27,7 +27,7 @@ const state = {
   eventDateFrom: '',
   eventDateTo: '',
   view: 'grid',
-  sort: 'auction_desc',
+  sort: 'auction_nearest',
   collecting: false,
   historyExpanded: false,
   filters: Object.fromEntries(facetConfig.map((facet) => [facet.key, []])),
@@ -511,7 +511,7 @@ function hydrateStateFromUrl() {
   state.page = positiveNumber(params.get('page'), 1);
   state.pageSize = [24, 48, 72, 100].includes(Number(params.get('pageSize'))) ? Number(params.get('pageSize')) : 24;
   state.view = params.get('view') === 'list' ? 'list' : 'grid';
-  state.sort = ['auction_desc', 'auction_asc', 'year_desc', 'year_asc', 'brand_asc', 'brand_desc'].includes(params.get('sort')) ? params.get('sort') : 'auction_desc';
+  state.sort = ['auction_nearest', 'auction_desc', 'auction_asc', 'year_desc', 'year_asc', 'brand_asc', 'brand_desc'].includes(params.get('sort')) ? params.get('sort') : 'auction_nearest';
   facetConfig.forEach((config) => {
     state.filters[config.key] = [...new Set(params.getAll(config.param).flatMap((value) => value.split(',')).filter(Boolean))];
   });
@@ -525,7 +525,7 @@ function buildParams(includePage) {
   if (state.search) params.set('search', state.search);
   if (state.eventDateFrom) params.set('eventDateFrom', state.eventDateFrom);
   if (state.eventDateTo) params.set('eventDateTo', state.eventDateTo);
-  if (state.sort !== 'auction_desc') params.set('sort', state.sort);
+  if (state.sort !== 'auction_nearest') params.set('sort', state.sort);
   facetConfig.forEach((config) => state.filters[config.key].forEach((value) => params.append(config.param, value)));
   if (includePage) {
     params.set('page', state.page);

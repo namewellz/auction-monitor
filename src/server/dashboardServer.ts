@@ -170,7 +170,7 @@ function filtersFromUrl(url: URL, page: number, pageSize: number) {
 }
 
 function sortParameter(value: string | null) {
-  const allowed = ['auction_desc', 'auction_asc', 'year_desc', 'year_asc', 'brand_asc', 'brand_desc'] as const;
+  const allowed = ['auction_nearest', 'auction_desc', 'auction_asc', 'year_desc', 'year_asc', 'brand_asc', 'brand_desc'] as const;
   return allowed.find((option) => option === value);
 }
 

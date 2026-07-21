@@ -430,12 +430,21 @@ function lotCard(lot) {
   const facts = lot.assetType === 'real_estate'
     ? `<dl class="vehicle-facts"><div><dt>Tipo</dt><dd>${escapeHtml(lot.propertyType || 'Imóvel')}</dd></div><div><dt>Área</dt><dd>${areaLabel(lot.privateAreaM2 || lot.totalAreaM2)}</dd></div><div><dt>Local</dt><dd>${escapeHtml([lot.neighborhood, location].filter(Boolean).join(' · '))}</dd></div></dl>`
     : `<dl class="vehicle-facts"><div><dt>Ano</dt><dd>${escapeHtml(year)}</dd></div><div><dt>KM</dt><dd>${lot.mileage == null ? '-' : number(lot.mileage)}</dd></div><div><dt>Local</dt><dd>${escapeHtml(location)}</dd></div></dl>`;
+  const roundValues = [
+    ['1ª praça', lot.firstRoundMinimumValue],
+    ['2ª praça', lot.secondRoundMinimumValue],
+    ['3ª praça', lot.thirdRoundMinimumValue],
+    ...(Number(lot.currentBid) > 0 ? [['Lance atual', lot.currentBid]] : []),
+  ].filter(([, value]) => Number(value) > 0);
+  const priceBlock = lot.assetType === 'real_estate' && roundValues.length
+    ? `<div class="bid-block round-values">${roundValues.map(([label, value]) => `<div><span>${label}</span><strong>${currency(value)}</strong></div>`).join('')}<small>${endingText(lot.auctionEnd)}</small></div>`
+    : `<div class="bid-block"><span>${lot.assetType === 'real_estate' ? 'Valor atual' : 'Lance atual'}</span><strong>${currency(lot.currentBid)}</strong><small>${endingText(lot.auctionEnd)}</small></div>`;
   return `<article class="lot-card" tabindex="0" data-lot-id="${lot.id}">
     <figure>${image}<span class="status-badge status-${escapeAttr(lot.businessState || 'other')}">${escapeHtml(status)}</span><span class="source-badge">${escapeHtml(siteLabel(lot.site))}</span></figure>
     <div class="lot-card-body">
       <div class="lot-identity"><span>${escapeHtml(assetTypeLabel(lot.assetType))}${escapeHtml(condition)} · Lote ${escapeHtml(lot.lotNumber || '-')} · ${number(lot.imageCount)} fotos</span><h2>${escapeHtml(lot.title)}</h2><small>${escapeHtml(lot.eventName || 'Evento não identificado')}</small></div>
       ${facts}
-      <div class="bid-block"><span>Lance atual</span><strong>${currency(lot.currentBid)}</strong><small>${endingText(lot.auctionEnd)}</small></div>
+      ${priceBlock}
     </div>
   </article>`;
 }

@@ -90,6 +90,9 @@ export interface LotData {
   latitude?: number;
   longitude?: number;
   acceptsFinancing?: boolean;
+  firstRoundMinimumValue?: number;
+  secondRoundMinimumValue?: number;
+  thirdRoundMinimumValue?: number;
   bidHistory?: BidHistoryEntry[];
 }
 

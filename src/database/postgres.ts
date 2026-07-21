@@ -226,8 +226,30 @@ export async function runPostgresMigrations(pool: Pool): Promise<void> {
       latitude DOUBLE PRECISION,
       longitude DOUBLE PRECISION,
       accepts_financing BOOLEAN,
+      first_round_minimum_value NUMERIC(16,2),
+      second_round_minimum_value NUMERIC(16,2),
+      third_round_minimum_value NUMERIC(16,2),
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
+
+    ALTER TABLE real_estate_details ADD COLUMN IF NOT EXISTS first_round_minimum_value NUMERIC(16,2);
+    ALTER TABLE real_estate_details ADD COLUMN IF NOT EXISTS second_round_minimum_value NUMERIC(16,2);
+    ALTER TABLE real_estate_details ADD COLUMN IF NOT EXISTS third_round_minimum_value NUMERIC(16,2);
+
+    UPDATE real_estate_details red SET
+      first_round_minimum_value = COALESCE(red.first_round_minimum_value,
+        CASE WHEN ml.raw_data_json->'additionalDetails'->>'valorMinimoPrimeiraPraca' ~ '^[0-9]+([.][0-9]+)?$'
+          THEN (ml.raw_data_json->'additionalDetails'->>'valorMinimoPrimeiraPraca')::numeric END,
+        CASE WHEN ml.site IN ('alessandroteixeira','alvaroleiloes')
+          AND ml.raw_data_json->'additionalDetails'->>'avaliacao' ~ '^[0-9]+([.][0-9]+)?$'
+          THEN (ml.raw_data_json->'additionalDetails'->>'avaliacao')::numeric END),
+      second_round_minimum_value = COALESCE(red.second_round_minimum_value,
+        CASE WHEN ml.raw_data_json->'additionalDetails'->>'valorMinimoSegundaPraca' ~ '^[0-9]+([.][0-9]+)?$'
+          THEN (ml.raw_data_json->'additionalDetails'->>'valorMinimoSegundaPraca')::numeric END),
+      third_round_minimum_value = COALESCE(red.third_round_minimum_value,
+        CASE WHEN ml.raw_data_json->'additionalDetails'->>'valorMinimoTerceiraPraca' ~ '^[0-9]+([.][0-9]+)?$'
+          THEN (ml.raw_data_json->'additionalDetails'->>'valorMinimoTerceiraPraca')::numeric END)
+    FROM market_lots ml WHERE ml.id=red.market_lot_id;
 
     CREATE TABLE IF NOT EXISTS vehicle_details (
       market_lot_id BIGINT PRIMARY KEY REFERENCES market_lots(id) ON DELETE CASCADE,

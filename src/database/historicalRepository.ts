@@ -511,19 +511,24 @@ export class HistoricalRepository {
     await client.query(
       `INSERT INTO real_estate_details (
         market_lot_id,state_code,city_code,neighborhood,neighborhood_normalized,postal_code,
-        property_type,occupancy_status,total_area_m2,private_area_m2,latitude,longitude,accepts_financing,updated_at
-      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,NOW())
+        property_type,occupancy_status,total_area_m2,private_area_m2,latitude,longitude,accepts_financing,
+        first_round_minimum_value,second_round_minimum_value,third_round_minimum_value,updated_at
+      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,NOW())
       ON CONFLICT(market_lot_id) DO UPDATE SET
         state_code=EXCLUDED.state_code,city_code=EXCLUDED.city_code,neighborhood=EXCLUDED.neighborhood,
         neighborhood_normalized=EXCLUDED.neighborhood_normalized,postal_code=EXCLUDED.postal_code,
         property_type=EXCLUDED.property_type,occupancy_status=EXCLUDED.occupancy_status,
         total_area_m2=EXCLUDED.total_area_m2,private_area_m2=EXCLUDED.private_area_m2,
         latitude=EXCLUDED.latitude,longitude=EXCLUDED.longitude,
-        accepts_financing=EXCLUDED.accepts_financing,updated_at=NOW()`,
+        accepts_financing=EXCLUDED.accepts_financing,
+        first_round_minimum_value=EXCLUDED.first_round_minimum_value,
+        second_round_minimum_value=EXCLUDED.second_round_minimum_value,
+        third_round_minimum_value=EXCLUDED.third_round_minimum_value,updated_at=NOW()`,
       [marketLotId, data.state, null, data.neighborhood ?? null, data.neighborhoodNormalized ?? null,
         data.postalCode ?? null, data.propertyType ?? null, data.occupancyStatus ?? null,
         data.totalAreaM2 ?? null, data.privateAreaM2 ?? null, data.latitude ?? null,
-        data.longitude ?? null, data.acceptsFinancing ?? null],
+        data.longitude ?? null, data.acceptsFinancing ?? null, data.firstRoundMinimumValue ?? null,
+        data.secondRoundMinimumValue ?? null, data.thirdRoundMinimumValue ?? null],
     );
   }
 

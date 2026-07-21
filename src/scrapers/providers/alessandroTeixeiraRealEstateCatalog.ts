@@ -69,7 +69,9 @@ function mapLot(lot: ApiLot, baseUrl: string): LotData {
   const description = plainText(lot.nm_descricao ?? '');
   const title = plainText(lot.nm_titulo_lote);
   const currentBid = money(lot.vl_lance);
-  const initialBids = [money(lot.vl_lanceinicial), money(lot.vl_lanceinicialsegundoleilao)].filter((value) => value > 0);
+  const firstRoundMinimumValue = money(lot.vl_lanceinicial) || money(lot.vl_lanceminimo);
+  const secondRoundMinimumValue = money(lot.vl_lanceinicialsegundoleilao);
+  const initialBids = [firstRoundMinimumValue, secondRoundMinimumValue].filter((value) => value > 0);
   const nextBid = currentBid > 0 ? currentBid : Math.min(...initialBids, money(lot.vl_lanceminimo));
   const coordinates = coordinatesFromIframe(lot.iframe_streetview);
   const area = extractArea(`${title} ${description}`);
@@ -87,6 +89,8 @@ function mapLot(lot: ApiLot, baseUrl: string): LotData {
     state: lot.nm_estado ?? '',
     address: [plainText(lot.nm_cidade ?? ''), lot.nm_estado ?? ''].filter(Boolean).join(' / '),
     propertyType: normalizePropertyType(`${lot.nm_subcategoria ?? ''} ${title}`),
+    ...(firstRoundMinimumValue ? { firstRoundMinimumValue } : {}),
+    ...(secondRoundMinimumValue ? { secondRoundMinimumValue } : {}),
     ...(area ? { totalAreaM2: area } : {}),
     ...(coordinates ? { latitude: coordinates[0], longitude: coordinates[1] } : {}),
     ...(description ? { observations: description } : {}),

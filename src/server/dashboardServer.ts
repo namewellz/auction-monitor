@@ -140,6 +140,7 @@ function filtersFromUrl(url: URL, page: number, pageSize: number) {
   const running = url.searchParams.get('runningAtEntry');
   const eventDateFrom = dateParameter(url.searchParams.get('eventDateFrom'));
   const eventDateTo = dateParameter(url.searchParams.get('eventDateTo'));
+  const endingWindowDays = url.searchParams.get('endingWindowDays') === '3' ? 3 : undefined;
   const sort = sortParameter(url.searchParams.get('sort'));
   return {
     page,
@@ -165,6 +166,7 @@ function filtersFromUrl(url: URL, page: number, pageSize: number) {
     ...(running === 'yes' ? { runningAtEntry: true } : running === 'no' ? { runningAtEntry: false } : {}),
     ...(eventDateFrom ? { eventDateFrom } : {}),
     ...(eventDateTo ? { eventDateTo } : {}),
+    ...(endingWindowDays ? { endingWindowDays } : {}),
     ...(sort ? { sort } : {}),
   };
 }

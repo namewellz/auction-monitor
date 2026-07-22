@@ -26,6 +26,7 @@ const state = {
   search: '',
   eventDateFrom: '',
   eventDateTo: '',
+  endingWindowDays: 0,
   view: 'grid',
   sort: 'auction_nearest',
   collecting: false,
@@ -89,6 +90,13 @@ function bindEvents() {
     applyState();
   });
   byId('facet-list').addEventListener('change', (event) => {
+    const endingWindow = event.target.closest('[data-ending-window]');
+    if (endingWindow) {
+      state.endingWindowDays = endingWindow.checked ? 3 : 0;
+      state.page = 1;
+      applyState();
+      return;
+    }
     const dateInput = event.target.closest('[data-date-filter]');
     if (dateInput) {
       state[dateInput.dataset.dateFilter] = dateInput.value;
@@ -193,8 +201,12 @@ function renderStats(data) {
   byId('stat-active').textContent = number(data.activeLots);
   byId('stat-results').textContent = number(data.lotsWithResult);
   byId('stat-average').textContent = currency(data.averageBid);
-  byId('stat-media').textContent = number(data.downloadedMedia);
-  byId('stat-media').title = `${fileSize(data.mediaBytes)} armazenados`;
+  byId('stat-images').textContent = number(data.downloadedImages);
+  byId('stat-images').title = `${number(data.downloadedImages)} de ${number(data.totalImages)} imagens baixadas · ${fileSize(data.imageBytes)}`;
+  byId('stat-documents').textContent = number(data.downloadedDocuments);
+  byId('stat-documents').title = `${number(data.downloadedDocuments)} de ${number(data.totalDocuments)} documentos baixados · ${fileSize(data.documentBytes)}`;
+  byId('stat-storage').textContent = fileSize(data.mediaBytes);
+  byId('stat-storage').title = 'Espaço ocupado por imagens e documentos baixados';
   byId('last-updated').textContent = data.lastUpdatedAt ? `Atualizado ${relativeTime(data.lastUpdatedAt)}` : 'Aguardando primeira coleta';
 }
 
@@ -301,7 +313,7 @@ function renderFacets() {
         end: document.activeElement.selectionEnd,
       }
     : null;
-  byId('facet-list').innerHTML = facetConfig.filter((config) => !config.catalog || config.catalog === state.catalog).map((config) => {
+  byId('facet-list').innerHTML = endingWindowMarkup() + facetConfig.filter((config) => !config.catalog || config.catalog === state.catalog).map((config) => {
     const selected = state.filters[config.key] || [];
     const sourceOptions = [...new Map((state.facets[config.key] || []).map((option) => {
       const value = String(option.value).trim();
@@ -330,6 +342,10 @@ function renderFacets() {
     input?.focus({ preventScroll: true });
     input?.setSelectionRange(focusedSearch.start, focusedSearch.end);
   }
+}
+
+function endingWindowMarkup() {
+  return `<div class="ending-window-filter"><strong>Encerramento próximo</strong><label><input type="checkbox" data-ending-window ${state.endingWindowDays === 3 ? 'checked' : ''}><span>3 dias atrás até 3 dias à frente</span></label></div>`;
 }
 
 function dateRangeMarkup() {
@@ -384,6 +400,7 @@ function renderActiveFilters() {
   if (state.search) chips.push(`<button type="button" data-remove-search>Busca: ${escapeHtml(state.search)} <span>&times;</span></button>`);
   if (state.eventDateFrom) chips.push(`<button type="button" data-remove-date="eventDateFrom">A partir de ${escapeHtml(shortDate(state.eventDateFrom))} <span>&times;</span></button>`);
   if (state.eventDateTo) chips.push(`<button type="button" data-remove-date="eventDateTo">Até ${escapeHtml(shortDate(state.eventDateTo))} <span>&times;</span></button>`);
+  if (state.endingWindowDays === 3) chips.push('<button type="button" data-remove-ending-window>Encerramento: ±3 dias <span>&times;</span></button>');
   facetConfig.forEach((config) => state.filters[config.key].forEach((value) => {
     const option = (state.facets[config.key] || []).find((candidate) => candidate.value === value);
     chips.push(`<button type="button" data-remove-facet="${config.key}" data-value="${escapeAttr(value)}">${escapeHtml(facetLabel(config.key, option?.label || value))} <span>&times;</span></button>`);
@@ -399,6 +416,11 @@ function renderActiveFilters() {
     state.page = 1;
     applyState();
   }));
+  container.querySelector('[data-remove-ending-window]')?.addEventListener('click', () => {
+    state.endingWindowDays = 0;
+    state.page = 1;
+    applyState();
+  });
   container.querySelector('[data-clear-all]')?.addEventListener('click', clearFilters);
   const count = activeFilterCount();
   byId('mobile-filter-count').textContent = String(count);
@@ -465,6 +487,7 @@ function clearFilters() {
   state.search = '';
   state.eventDateFrom = '';
   state.eventDateTo = '';
+  state.endingWindowDays = 0;
   state.filters = Object.fromEntries(facetConfig.map((facet) => [facet.key, []]));
   state.page = 1;
   byId('search-input').value = '';
@@ -508,6 +531,7 @@ function hydrateStateFromUrl() {
   state.search = params.get('search') || '';
   state.eventDateFrom = validDateValue(params.get('eventDateFrom'));
   state.eventDateTo = validDateValue(params.get('eventDateTo'));
+  state.endingWindowDays = params.get('endingWindowDays') === '3' ? 3 : 0;
   state.page = positiveNumber(params.get('page'), 1);
   state.pageSize = [24, 48, 72, 100].includes(Number(params.get('pageSize'))) ? Number(params.get('pageSize')) : 24;
   state.view = params.get('view') === 'list' ? 'list' : 'grid';
@@ -525,6 +549,7 @@ function buildParams(includePage) {
   if (state.search) params.set('search', state.search);
   if (state.eventDateFrom) params.set('eventDateFrom', state.eventDateFrom);
   if (state.eventDateTo) params.set('eventDateTo', state.eventDateTo);
+  if (state.endingWindowDays === 3) params.set('endingWindowDays', '3');
   if (state.sort !== 'auction_nearest') params.set('sort', state.sort);
   facetConfig.forEach((config) => state.filters[config.key].forEach((value) => params.append(config.param, value)));
   if (includePage) {
@@ -542,7 +567,7 @@ function syncUrl() {
 
 function activeFilterCount() {
   return facetConfig.reduce((total, config) => total + state.filters[config.key].length, 0)
-    + Number(Boolean(state.eventDateFrom)) + Number(Boolean(state.eventDateTo));
+    + Number(Boolean(state.eventDateFrom)) + Number(Boolean(state.eventDateTo)) + Number(state.endingWindowDays === 3);
 }
 
 function openFilters() {
@@ -899,7 +924,16 @@ function normalizeSearch(value) { return String(value || '').normalize('NFD').re
 function currency(value) { return value == null ? '-' : new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(value); }
 function number(value) { return new Intl.NumberFormat('pt-BR').format(Number(value || 0)); }
 function dateTime(value) { return value ? new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short', timeStyle: 'short' }).format(new Date(value)) : '-'; }
-function fileSize(value) { return new Intl.NumberFormat('pt-BR', { style: 'unit', unit: 'megabyte', maximumFractionDigits: 1 }).format(Number(value || 0) / 1024 / 1024); }
+function fileSize(value) {
+  const bytes = Math.max(0, Number(value || 0));
+  const units = [
+    ['gigabyte', 1024 ** 3],
+    ['megabyte', 1024 ** 2],
+    ['kilobyte', 1024],
+  ];
+  const [unit, divisor] = units.find(([, threshold]) => bytes >= threshold) || ['byte', 1];
+  return new Intl.NumberFormat('pt-BR', { style: 'unit', unit, maximumFractionDigits: 1 }).format(bytes / divisor);
+}
 function mediaUrl(item) { return item.downloadStatus === 'downloaded' ? `/api/media/${item.id}` : item.sourceUrl; }
 function siteLabel(site) { return ({ leilo: 'Leilo', vipleiloes: 'VIP Leilões', superbid: 'Superbid', francoleiloes: 'Franco Leilões', alessandroteixeira: 'Alessandro Teixeira Leilões', alvaroleiloes: 'Álvaro Leilões' })[site] || site || '-'; }
 function areaLabel(value) { return value == null || value === '' ? '-' : `${number(value)} m²`; }

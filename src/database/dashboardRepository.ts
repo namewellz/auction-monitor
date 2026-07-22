@@ -22,6 +22,7 @@ export interface DashboardFilters {
   runningAtEntry?: boolean;
   eventDateFrom?: string;
   eventDateTo?: string;
+  endingWindowDays?: number;
   sort?: LotSort;
   page: number;
   pageSize: number;
@@ -143,6 +144,10 @@ function buildLotWhere(filters: DashboardFilters, omittedFacet?: LotFacetKey): {
   if (filters.eventDateTo) {
     conditions.push(`(COALESCE(ml.auction_start,ml.auction_end) AT TIME ZONE 'America/Sao_Paulo')::date <= ${addParam(filters.eventDateTo)}::date`);
   }
+  if (filters.endingWindowDays) {
+    const days = addParam(filters.endingWindowDays);
+    conditions.push(`ml.auction_end BETWEEN NOW() - (${days}::int * INTERVAL '1 day') AND NOW() + (${days}::int * INTERVAL '1 day')`);
+  }
   return { where: conditions.join(' AND '), params };
 }
 
@@ -185,7 +190,11 @@ export class DashboardRepository {
         MAX(last_seen_at) AS "lastUpdatedAt",
         (SELECT COUNT(*)::int FROM lot_media lm JOIN filtered f ON f.id=lm.market_lot_id) AS "totalMedia",
         (SELECT COUNT(*)::int FROM lot_media lm JOIN filtered f ON f.id=lm.market_lot_id WHERE lm.type='image') AS "totalImages",
-        (SELECT COUNT(*)::int FROM lot_media lm JOIN filtered f ON f.id=lm.market_lot_id WHERE lm.type='image' AND lm.download_status='downloaded') AS "downloadedMedia",
+        (SELECT COUNT(*)::int FROM lot_media lm JOIN filtered f ON f.id=lm.market_lot_id WHERE lm.type='image' AND lm.download_status='downloaded') AS "downloadedImages",
+        (SELECT COALESCE(SUM(lm.size_bytes), 0)::float FROM lot_media lm JOIN filtered f ON f.id=lm.market_lot_id WHERE lm.type='image' AND lm.download_status='downloaded') AS "imageBytes",
+        (SELECT COUNT(*)::int FROM lot_media lm JOIN filtered f ON f.id=lm.market_lot_id WHERE lm.type='document') AS "totalDocuments",
+        (SELECT COUNT(*)::int FROM lot_media lm JOIN filtered f ON f.id=lm.market_lot_id WHERE lm.type='document' AND lm.download_status='downloaded') AS "downloadedDocuments",
+        (SELECT COALESCE(SUM(lm.size_bytes), 0)::float FROM lot_media lm JOIN filtered f ON f.id=lm.market_lot_id WHERE lm.type='document' AND lm.download_status='downloaded') AS "documentBytes",
         (SELECT COALESCE(SUM(lm.size_bytes), 0)::float FROM lot_media lm JOIN filtered f ON f.id=lm.market_lot_id WHERE lm.download_status='downloaded') AS "mediaBytes"
       FROM filtered
     `, query.params);

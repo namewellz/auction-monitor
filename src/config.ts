@@ -25,6 +25,8 @@ export interface AppConfig {
   alvaroRequestIntervalMs: number;
   brunoRequestIntervalMs: number;
   calilRequestIntervalMs: number;
+  capitalValorRequestIntervalMs: number;
+  d1LanceRequestIntervalMs: number;
   superbidRequestIntervalMs: number;
   superbidCatalogPageSize: number;
   superbidCatalogMaxOffers: number;
@@ -115,6 +117,8 @@ export const config: AppConfig = {
   alvaroRequestIntervalMs: parsePositiveInt(process.env.ALVARO_REQUEST_INTERVAL_MS, 750),
   brunoRequestIntervalMs: parsePositiveInt(process.env.BRUNO_REQUEST_INTERVAL_MS, 750),
   calilRequestIntervalMs: parsePositiveInt(process.env.CALIL_REQUEST_INTERVAL_MS, 750),
+  capitalValorRequestIntervalMs: parsePositiveInt(process.env.CAPITAL_VALOR_REQUEST_INTERVAL_MS, 750),
+  d1LanceRequestIntervalMs: parsePositiveInt(process.env.D1_LANCE_REQUEST_INTERVAL_MS, 750),
   superbidRequestIntervalMs: parsePositiveInt(process.env.SUPERBID_REQUEST_INTERVAL_MS, 750),
   superbidCatalogPageSize: parsePositiveInt(process.env.SUPERBID_CATALOG_PAGE_SIZE, 100),
   superbidCatalogMaxOffers: Number.isInteger(Number(process.env.SUPERBID_CATALOG_MAX_OFFERS))

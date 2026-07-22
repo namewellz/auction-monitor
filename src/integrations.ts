@@ -17,5 +17,7 @@ export function integrationDefinitions(leiloApiUrl: string): IntegrationDefiniti
     { site: 'alvaroleiloes', name: 'Álvaro Leilões', catalog: 'real_estate', publicUrl: 'https://alvaroleiloes.com.br/leilao/index/imoveis', collectionUrl: 'https://alvaroleiloes.com.br/core/api/get-lotes', scopes: ['Imóveis'] },
     { site: 'brunoleiloes', name: 'Bruno Leilões', catalog: 'real_estate', publicUrl: 'https://www.brunoleiloes.com.br/leilao/index/imoveis', collectionUrl: 'https://www.brunoleiloes.com.br/core/api/get-lotes', scopes: ['Imóveis'] },
     { site: 'calilleiloes', name: 'Calil Leilões', catalog: 'real_estate', publicUrl: 'https://www.calilleiloes.com.br/lotes/imovel', collectionUrl: 'https://www.calilleiloes.com.br/lotes/imovel', scopes: ['Imóveis'] },
+    { site: 'capitalvalorleiloes', name: 'Capital Valor Leilões', catalog: 'real_estate', publicUrl: 'https://www.capitalvalorleiloes.com.br/leilao/index/imoveis', collectionUrl: 'https://www.capitalvalorleiloes.com.br/core/api/get-lotes', scopes: ['Imóveis'] },
+    { site: 'd1lance', name: 'D1 Lance', catalog: 'real_estate', publicUrl: 'https://d1lance.com.br/navegar-pelo-mapa?tipo_filtro=imoveis', collectionUrl: 'https://d1lance.com.br/navegar-pelo-mapa?tipo_filtro=imoveis', scopes: ['Imóveis'] },
   ];
 }

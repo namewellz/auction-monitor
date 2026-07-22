@@ -953,7 +953,7 @@ function fileSize(value) {
   return new Intl.NumberFormat('pt-BR', { style: 'unit', unit, maximumFractionDigits: 1 }).format(bytes / divisor);
 }
 function mediaUrl(item) { return item.downloadStatus === 'downloaded' ? `/api/media/${item.id}` : item.sourceUrl; }
-function siteLabel(site) { return ({ leilo: 'Leilo', vipleiloes: 'VIP Leilões', superbid: 'Superbid', francoleiloes: 'Franco Leilões', alessandroteixeira: 'Alessandro Teixeira Leilões', alvaroleiloes: 'Álvaro Leilões', brunoleiloes: 'Bruno Leilões', calilleiloes: 'Calil Leilões' })[site] || site || ''; }
+function siteLabel(site) { return ({ leilo: 'Leilo', vipleiloes: 'VIP Leilões', superbid: 'Superbid', francoleiloes: 'Franco Leilões', alessandroteixeira: 'Alessandro Teixeira Leilões', alvaroleiloes: 'Álvaro Leilões', brunoleiloes: 'Bruno Leilões', calilleiloes: 'Calil Leilões', capitalvalorleiloes: 'Capital Valor Leilões', d1lance: 'D1 Lance' })[site] || site || ''; }
 function areaLabel(value) { return value == null || value === '' ? '-' : `${number(value)} m²`; }
 function documentTypeLabel(type) { return ({ matricula: 'Matrícula', edital: 'Edital', condicoes: 'Condições', laudo: 'Laudo', outro: 'Documento' })[type] || ''; }
 function assetTypeLabel(value) { return ({ car: 'Carro', motorcycle: 'Moto', heavy: 'Pesado', real_estate: 'Imóvel' })[value] || 'Bem'; }

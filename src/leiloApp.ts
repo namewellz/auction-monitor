@@ -19,6 +19,8 @@ import { AlessandroTeixeiraRealEstateCatalogProvider } from './scrapers/provider
 import { AlvaroRealEstateCatalogProvider } from './scrapers/providers/alvaroRealEstateCatalog.js';
 import { BrunoRealEstateCatalogProvider } from './scrapers/providers/brunoRealEstateCatalog.js';
 import { CalilRealEstateCatalogProvider } from './scrapers/providers/calilRealEstateCatalog.js';
+import { CapitalValorRealEstateCatalogProvider } from './scrapers/providers/capitalValorRealEstateCatalog.js';
+import { D1LanceRealEstateCatalogProvider } from './scrapers/providers/d1LanceRealEstateCatalog.js';
 import { SuperbidCatalogProvider } from './scrapers/providers/superbidCatalog.js';
 import { integrationDefinitions } from './integrations.js';
 
@@ -56,6 +58,8 @@ const bulkCollector = new CatalogCollectionService(
     new AlvaroRealEstateCatalogProvider(config.alvaroRequestIntervalMs),
     new BrunoRealEstateCatalogProvider(config.brunoRequestIntervalMs),
     new CalilRealEstateCatalogProvider(config.calilRequestIntervalMs),
+    new CapitalValorRealEstateCatalogProvider(config.capitalValorRequestIntervalMs),
+    new D1LanceRealEstateCatalogProvider(config.d1LanceRequestIntervalMs),
     new SuperbidCatalogProvider(config.superbidCatalogPageSize, config.superbidRequestIntervalMs,
       config.superbidCatalogMaxOffers),
   ],

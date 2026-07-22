@@ -6,6 +6,7 @@ import type { DashboardRepository } from '../database/dashboardRepository.js';
 import type { CatalogCollectionService } from '../services/catalogCollectionService.js';
 import type { Logger } from '../utils/logger.js';
 import type { MediaStorageService } from '../services/mediaStorageService.js';
+import type { IntegrationDefinition } from '../integrations.js';
 
 const webRoot = resolve(fileURLToPath(new URL('../../web', import.meta.url)));
 
@@ -15,6 +16,7 @@ export class DashboardServer {
     private readonly collector: CatalogCollectionService,
     private readonly mediaStorage: MediaStorageService,
     private readonly logger: Logger,
+    private readonly integrations: IntegrationDefinition[] = [],
   ) {}
 
   public listen(port: number): void {
@@ -37,6 +39,14 @@ export class DashboardServer {
       }
       if (url.pathname === '/api/catalogs' && request.method === 'GET') {
         return json(response, 200, await this.repository.catalogs());
+      }
+      if (url.pathname === '/api/integrations' && request.method === 'GET') {
+        const stats = await this.repository.integrationStats() as Array<Record<string, unknown>>;
+        const bySite = new Map(stats.map((item) => [item.site, item]));
+        return json(response, 200, this.integrations.map((integration) => ({
+          ...integration,
+          ...(bySite.get(integration.site) ?? { lotCount: 0, activeLots: 0, eventCount: 0, assetTypes: [] }),
+        })));
       }
       if (url.pathname === '/api/storage/stats' && request.method === 'GET') {
         return json(response, 200, await this.repository.storageStats());
@@ -84,13 +94,16 @@ export class DashboardServer {
       if (url.pathname === '/api/collection' && request.method === 'GET') {
         return json(response, 200, this.collector.getProgress());
       }
-      if (url.pathname === '/api/collection/leilo' && request.method === 'POST') {
-        if (!this.collector.getProgress().running) void this.collector.collectAll('leilo');
-        return json(response, 202, this.collector.getProgress());
-      }
-      const collectionMatch = url.pathname.match(/^\/api\/collection\/(leilo|vipleiloes|superbid|francoleiloes|alessandroteixeira|alvaroleiloes)$/);
+      const collectionMatch = url.pathname.match(/^\/api\/collection\/([a-z0-9_-]+)$/);
       if (collectionMatch?.[1] && request.method === 'POST') {
-        if (!this.collector.getProgress().running) void this.collector.collectAll(collectionMatch[1]);
+        const site = collectionMatch[1];
+        if (!this.integrations.some((integration) => integration.site === site)) {
+          return json(response, 404, { error: 'Integração não encontrada.' });
+        }
+        if (this.collector.getProgress().running) {
+          return json(response, 409, { error: 'Já existe uma coleta em andamento.', progress: this.collector.getProgress() });
+        }
+        void this.collector.collectAll(site);
         return json(response, 202, this.collector.getProgress());
       }
       if (url.pathname === '/api/collection' && request.method === 'POST') {

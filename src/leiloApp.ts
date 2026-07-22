@@ -17,7 +17,10 @@ import { CatalogCollectionService } from './services/catalogCollectionService.js
 import { FrancoRealEstateCatalogProvider } from './scrapers/providers/francoRealEstateCatalog.js';
 import { AlessandroTeixeiraRealEstateCatalogProvider } from './scrapers/providers/alessandroTeixeiraRealEstateCatalog.js';
 import { AlvaroRealEstateCatalogProvider } from './scrapers/providers/alvaroRealEstateCatalog.js';
+import { BrunoRealEstateCatalogProvider } from './scrapers/providers/brunoRealEstateCatalog.js';
+import { CalilRealEstateCatalogProvider } from './scrapers/providers/calilRealEstateCatalog.js';
 import { SuperbidCatalogProvider } from './scrapers/providers/superbidCatalog.js';
+import { integrationDefinitions } from './integrations.js';
 
 const logger = new Logger(config.logLevel);
 const pool = createPostgresPool(config.postgresUrl);
@@ -51,6 +54,8 @@ const bulkCollector = new CatalogCollectionService(
     new FrancoRealEstateCatalogProvider(config.francoRequestIntervalMs),
     new AlessandroTeixeiraRealEstateCatalogProvider(config.alessandroRequestIntervalMs),
     new AlvaroRealEstateCatalogProvider(config.alvaroRequestIntervalMs),
+    new BrunoRealEstateCatalogProvider(config.brunoRequestIntervalMs),
+    new CalilRealEstateCatalogProvider(config.calilRequestIntervalMs),
     new SuperbidCatalogProvider(config.superbidCatalogPageSize, config.superbidRequestIntervalMs,
       config.superbidCatalogMaxOffers),
   ],
@@ -78,7 +83,9 @@ const historicalScheduler = new HistoricalCollectorScheduler(
   logger,
   config.collectorBatchSize,
 );
-const server = new DashboardServer(new DashboardRepository(pool), bulkCollector, mediaStorage, logger);
+const server = new DashboardServer(
+  new DashboardRepository(pool), bulkCollector, mediaStorage, logger, integrationDefinitions(config.leiloApiUrl),
+);
 
 server.listen(config.dashboardPort);
 cron.schedule(config.catalogCollectionCron, () => void bulkCollector.collectAll());

@@ -59,6 +59,7 @@ document.addEventListener('DOMContentLoaded', () => {
   bindEvents();
   reflectCollectionHistoryState();
   reflectStateInControls();
+  void loadCollectionSites();
   void loadDashboard();
   setInterval(pollCollection, 3000);
 });
@@ -189,9 +190,11 @@ async function loadDashboard() {
 }
 
 async function loadSourceNav() {
-  const counts = Object.fromEntries((await api('/api/catalogs')).map((item) => [item.catalog, item.lotCount]));
+  const [catalogs, integrations] = await Promise.all([api('/api/catalogs'), api('/api/integrations')]);
+  const counts = Object.fromEntries(catalogs.map((item) => [item.catalog, item.lotCount]));
   byId('source-nav').innerHTML = [['vehicles', 'Veículos'], ['real_estate', 'Imóveis']]
-    .map(([catalog, label]) => `<button class="source-tab" type="button" data-catalog="${catalog}">${label}<small>${number(counts[catalog] || 0)}</small></button>`).join('');
+    .map(([catalog, label]) => `<button class="source-tab" type="button" data-catalog="${catalog}">${label}<small>${number(counts[catalog] || 0)}</small></button>`).join('')
+    + `<a class="source-tab integrations-tab" href="/integrations.html">Integrações<small>${integrations.length}</small></a>`;
   reflectStateInControls();
 }
 
@@ -865,9 +868,23 @@ async function startCollection() {
   const button = byId('collect-button');
   button.disabled = true;
   button.textContent = 'Coleta em andamento';
-  const selectedSite = state.filters.site.length === 1 ? state.filters.site[0] : '';
-  await api(selectedSite ? `/api/collection/${selectedSite}` : '/api/collection', { method: 'POST' });
-  await pollCollection();
+  const selectedSite = byId('collection-site-select').value;
+  try {
+    await api(selectedSite ? `/api/collection/${selectedSite}` : '/api/collection', { method: 'POST' });
+    await pollCollection();
+  } catch (error) {
+    button.disabled = false;
+    button.textContent = 'Atualizar coleta';
+    window.alert(error.message);
+  }
+}
+
+async function loadCollectionSites() {
+  try {
+    const integrations = await api('/api/integrations');
+    byId('collection-site-select').innerHTML = '<option value="">Todos os sites</option>' + integrations
+      .map((item) => `<option value="${escapeAttr(item.site)}">${escapeHtml(item.name)}</option>`).join('');
+  } catch {}
 }
 
 async function pollCollection() {
@@ -875,11 +892,12 @@ async function pollCollection() {
   const wasCollecting = state.collecting;
   state.collecting = Boolean(progress.running);
   byId('collect-button').disabled = state.collecting;
+  byId('collection-site-select').disabled = state.collecting;
   byId('collect-button').textContent = state.collecting ? 'Coleta em andamento' : 'Atualizar coleta';
   byId('collection-strip').hidden = !state.collecting && !progress.lastError;
   if (state.collecting) {
     const percentage = progress.totalPages ? Math.round((progress.processedPages / progress.totalPages) * 100) : 2;
-    byId('collection-title').textContent = `Atualizando ${progress.site ? siteLabel(progress.site) : 'catálogos'}`;
+    byId('collection-title').textContent = `Atualizando ${siteLabel(progress.currentSite || progress.site) || 'catálogos'}`;
     byId('collection-detail').textContent = `${progress.processedPages}/${progress.totalPages || '?'} páginas · ${progress.new} novos · ${progress.updated} atualizados · ${progress.unchanged} sem alteração`;
     byId('collection-progress').style.width = `${percentage}%`;
   } else if (progress.lastError) {
@@ -935,7 +953,7 @@ function fileSize(value) {
   return new Intl.NumberFormat('pt-BR', { style: 'unit', unit, maximumFractionDigits: 1 }).format(bytes / divisor);
 }
 function mediaUrl(item) { return item.downloadStatus === 'downloaded' ? `/api/media/${item.id}` : item.sourceUrl; }
-function siteLabel(site) { return ({ leilo: 'Leilo', vipleiloes: 'VIP Leilões', superbid: 'Superbid', francoleiloes: 'Franco Leilões', alessandroteixeira: 'Alessandro Teixeira Leilões', alvaroleiloes: 'Álvaro Leilões' })[site] || site || '-'; }
+function siteLabel(site) { return ({ leilo: 'Leilo', vipleiloes: 'VIP Leilões', superbid: 'Superbid', francoleiloes: 'Franco Leilões', alessandroteixeira: 'Alessandro Teixeira Leilões', alvaroleiloes: 'Álvaro Leilões', brunoleiloes: 'Bruno Leilões', calilleiloes: 'Calil Leilões' })[site] || site || ''; }
 function areaLabel(value) { return value == null || value === '' ? '-' : `${number(value)} m²`; }
 function documentTypeLabel(type) { return ({ matricula: 'Matrícula', edital: 'Edital', condicoes: 'Condições', laudo: 'Laudo', outro: 'Documento' })[type] || ''; }
 function assetTypeLabel(value) { return ({ car: 'Carro', motorcycle: 'Moto', heavy: 'Pesado', real_estate: 'Imóvel' })[value] || 'Bem'; }

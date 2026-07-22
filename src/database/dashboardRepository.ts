@@ -208,6 +208,30 @@ export class DashboardRepository {
     return result.rows;
   }
 
+  public async integrationStats(): Promise<unknown[]> {
+    const result = await this.pool.query(`
+      WITH lot_stats AS (
+        SELECT site,COUNT(*)::int AS "lotCount",MAX(last_seen_at) AS "lastSeenAt",
+          COUNT(*) FILTER (WHERE auction_end > NOW())::int AS "activeLots",
+          COUNT(DISTINCT event_id)::int AS "eventCount",
+          ARRAY_REMOVE(ARRAY_AGG(DISTINCT asset_type),NULL) AS "assetTypes"
+        FROM market_lots GROUP BY site
+      ), latest_runs AS (
+        SELECT DISTINCT ON (site) site,status,started_at AS "startedAt",finished_at AS "finishedAt",
+          discovered_count AS "discoveredCount",new_count AS "newCount",updated_count AS "updatedCount",
+          failed_count AS "failedCount",error
+        FROM collection_runs WHERE site IS NOT NULL ORDER BY site,started_at DESC
+      )
+      SELECT COALESCE(ls.site,lr.site) AS site,COALESCE(ls."lotCount",0)::int AS "lotCount",
+        COALESCE(ls."activeLots",0)::int AS "activeLots",COALESCE(ls."eventCount",0)::int AS "eventCount",
+        COALESCE(ls."assetTypes",ARRAY[]::text[]) AS "assetTypes",ls."lastSeenAt",
+        lr.status AS "lastRunStatus",lr."startedAt" AS "lastRunStartedAt",lr."finishedAt" AS "lastRunFinishedAt",
+        lr."discoveredCount",lr."newCount",lr."updatedCount",lr."failedCount",lr.error AS "lastError"
+      FROM lot_stats ls FULL JOIN latest_runs lr ON lr.site=ls.site ORDER BY site
+    `);
+    return result.rows;
+  }
+
   public async catalogs(): Promise<unknown[]> {
     const result = await this.pool.query(`
       SELECT CASE WHEN asset_type='real_estate' THEN 'real_estate' ELSE 'vehicles' END AS catalog,

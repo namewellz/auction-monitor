@@ -23,6 +23,8 @@ export interface AppConfig {
   francoRequestIntervalMs: number;
   alessandroRequestIntervalMs: number;
   alvaroRequestIntervalMs: number;
+  brunoRequestIntervalMs: number;
+  calilRequestIntervalMs: number;
   superbidRequestIntervalMs: number;
   superbidCatalogPageSize: number;
   superbidCatalogMaxOffers: number;
@@ -111,6 +113,8 @@ export const config: AppConfig = {
   francoRequestIntervalMs: parsePositiveInt(process.env.FRANCO_REQUEST_INTERVAL_MS, 750),
   alessandroRequestIntervalMs: parsePositiveInt(process.env.ALESSANDRO_REQUEST_INTERVAL_MS, 750),
   alvaroRequestIntervalMs: parsePositiveInt(process.env.ALVARO_REQUEST_INTERVAL_MS, 750),
+  brunoRequestIntervalMs: parsePositiveInt(process.env.BRUNO_REQUEST_INTERVAL_MS, 750),
+  calilRequestIntervalMs: parsePositiveInt(process.env.CALIL_REQUEST_INTERVAL_MS, 750),
   superbidRequestIntervalMs: parsePositiveInt(process.env.SUPERBID_REQUEST_INTERVAL_MS, 750),
   superbidCatalogPageSize: parsePositiveInt(process.env.SUPERBID_CATALOG_PAGE_SIZE, 100),
   superbidCatalogMaxOffers: Number.isInteger(Number(process.env.SUPERBID_CATALOG_MAX_OFFERS))

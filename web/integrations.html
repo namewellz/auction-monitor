@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Integrações · Auction Data</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <header class="site-header integrations-header">
+    <div class="header-main">
+      <a class="brand" href="/" aria-label="Auction Data"><span class="brand-symbol" aria-hidden="true"><i></i><b></b></span><span><strong>Auction</strong><small>data</small></span></a>
+      <div class="integrations-title"><span>Operação</span><strong>Integrações</strong></div>
+      <div class="header-actions"><a class="header-link" href="/">Voltar ao dashboard</a></div>
+    </div>
+  </header>
+  <section id="integration-collection-strip" class="collection-strip integration-collection-strip" hidden>
+    <div><strong id="integration-collection-title">Coleta em andamento</strong><span id="integration-collection-detail"></span></div>
+    <div class="progress-track"><span id="integration-collection-progress"></span></div>
+  </section>
+  <main class="integrations-page">
+    <header class="integrations-intro"><div><span class="eyebrow">Fontes monitoradas</span><h1>Mapa de integrações</h1><p>URLs conectadas ao coletor e situação atual de cada catálogo.</p></div><div id="integration-totals" class="integration-totals"></div></header>
+    <section aria-labelledby="vehicle-integrations"><div class="integration-section-title"><h2 id="vehicle-integrations">Veículos</h2><span id="vehicles-count"></span></div><div id="vehicles-integrations-list" class="integration-grid"></div></section>
+    <section aria-labelledby="real-estate-integrations"><div class="integration-section-title"><h2 id="real-estate-integrations">Imóveis</h2><span id="real-estate-count"></span></div><div id="real-estate-integrations-list" class="integration-grid"></div></section>
+  </main>
+  <script src="/integrations.js" defer></script>
+</body>
+</html>

@@ -8,6 +8,7 @@ import type { MediaStorageService } from './mediaStorageService.js';
 export interface CatalogCollectionProgress {
   running: boolean;
   site?: string;
+  currentSite?: string;
   startedAt?: string;
   finishedAt?: string;
   totalPages: number;
@@ -84,6 +85,7 @@ export class CatalogCollectionService {
   }
 
   private async collectProvider(provider: CatalogProvider, visited: Set<string>): Promise<void> {
+    this.progress.currentSite = provider.site;
     let page = 1;
     let expectedPagesAdded = false;
     while (page <= this.maxPages) {

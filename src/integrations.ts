@@ -19,5 +19,9 @@ export function integrationDefinitions(leiloApiUrl: string): IntegrationDefiniti
     { site: 'calilleiloes', name: 'Calil Leilões', catalog: 'real_estate', publicUrl: 'https://www.calilleiloes.com.br/lotes/imovel', collectionUrl: 'https://www.calilleiloes.com.br/lotes/imovel', scopes: ['Imóveis'] },
     { site: 'capitalvalorleiloes', name: 'Capital Valor Leilões', catalog: 'real_estate', publicUrl: 'https://www.capitalvalorleiloes.com.br/leilao/index/imoveis', collectionUrl: 'https://www.capitalvalorleiloes.com.br/core/api/get-lotes', scopes: ['Imóveis'] },
     { site: 'd1lance', name: 'D1 Lance', catalog: 'real_estate', publicUrl: 'https://d1lance.com.br/navegar-pelo-mapa?tipo_filtro=imoveis', collectionUrl: 'https://d1lance.com.br/navegar-pelo-mapa?tipo_filtro=imoveis', scopes: ['Imóveis'] },
+    { site: 'carloferrarileiloes', name: 'Carlo Ferrari Leilões', catalog: 'real_estate', publicUrl: 'https://www.carloferrarileiloes.com.br/leilao/index/imoveis', collectionUrl: 'https://www.carloferrarileiloes.com.br/core/api/get-lotes', scopes: ['Imóveis'] },
+    { site: 'dasilvaleiloes', name: 'Da Silva Leilões', catalog: 'real_estate', publicUrl: 'https://www.dasilvaleiloes.com.br/leilao/index/imoveis', collectionUrl: 'https://www.dasilvaleiloes.com.br/core/api/get-lotes', scopes: ['Imóveis'] },
+    { site: 'cidafixerleiloes', name: 'Cida Fixer Leilões', catalog: 'real_estate', publicUrl: 'https://www.cidafixerleiloes.com.br/leilao/index/imoveis', collectionUrl: 'https://www.cidafixerleiloes.com.br/core/api/get-lotes', scopes: ['Imóveis'] },
+    { site: 'doleiloes', name: 'Dó Leilões', catalog: 'real_estate', publicUrl: 'https://www.doleiloes.com.br/leilao/index/imoveis', collectionUrl: 'https://www.doleiloes.com.br/core/api/get-lotes', scopes: ['Imóveis'] },
   ];
 }

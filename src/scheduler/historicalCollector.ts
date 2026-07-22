@@ -6,7 +6,9 @@ import type { MediaStorageService } from '../services/mediaStorageService.js';
 
 export class HistoricalCollectorScheduler {
   private task: ScheduledTask | undefined;
+  private mediaTask: ScheduledTask | undefined;
   private running = false;
+  private mediaRunning = false;
 
   public constructor(
     private readonly cronExpression: string,
@@ -20,13 +22,17 @@ export class HistoricalCollectorScheduler {
   public start(): void {
     if (this.task) return;
     this.task = cron.schedule(this.cronExpression, () => void this.tick());
+    this.mediaTask = cron.schedule(this.cronExpression, () => void this.tickMedia());
     void this.tick();
+    void this.tickMedia();
     this.logger.info('Historical collector started', { cron: this.cronExpression });
   }
 
   public stop(): void {
     this.task?.stop();
+    this.mediaTask?.stop();
     this.task = undefined;
+    this.mediaTask = undefined;
   }
 
   private async tick(): Promise<void> {
@@ -52,10 +58,23 @@ export class HistoricalCollectorScheduler {
         this.logger.info('Due historical lots revalidated', { ...dueResult });
       }
 
-      const mediaResult = await this.mediaStorage.downloadPending();
-      if (mediaResult.queued > 0) this.logger.info('Pending media downloaded', { ...mediaResult });
     } finally {
       this.running = false;
+    }
+  }
+
+  private async tickMedia(): Promise<void> {
+    if (this.mediaRunning) return;
+    this.mediaRunning = true;
+    try {
+      const mediaResult = await this.mediaStorage.downloadPending();
+      if (mediaResult.queued > 0) this.logger.info('Pending media downloaded', { ...mediaResult });
+    } catch (error) {
+      this.logger.error('Pending media processing failed', {
+        error: error instanceof Error ? error.message : String(error),
+      });
+    } finally {
+      this.mediaRunning = false;
     }
   }
 }

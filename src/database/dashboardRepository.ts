@@ -278,6 +278,114 @@ export class DashboardRepository {
     return result.rows;
   }
 
+  public async operationQueues(site?: string): Promise<{ queues: unknown[]; sites: string[] }> {
+    const mediaQueue = async (type: 'image' | 'document', queue: string) => {
+      const result = await this.pool.query(`
+        SELECT $2::text AS queue,
+          COUNT(*) FILTER (WHERE lm.download_status IN ('pending','failed','metadata_only') AND lm.download_attempts<4)::int AS pending,
+          COUNT(*) FILTER (WHERE lm.download_status='processing')::int AS processing,
+          COUNT(*) FILTER (WHERE lm.download_status='failed' AND lm.download_attempts<4)::int AS failed,
+          COUNT(*) FILTER (WHERE lm.download_status<>'downloaded' AND lm.download_attempts>=4)::int AS exhausted,
+          MIN(lm.first_seen_at) FILTER (WHERE lm.download_status<>'downloaded') AS "oldestAt",
+          COUNT(*) FILTER (WHERE lm.downloaded_at>=NOW()-INTERVAL '1 hour')::int AS "throughput1h",
+          COUNT(*) FILTER (WHERE lm.downloaded_at>=NOW()-INTERVAL '24 hours')::int AS "throughput24h",
+          percentile_cont(0.5) WITHIN GROUP (ORDER BY EXTRACT(EPOCH FROM (lm.processing_finished_at-lm.processing_started_at)))
+            FILTER (WHERE lm.processing_finished_at IS NOT NULL AND lm.processing_started_at IS NOT NULL) AS "cycleP50Seconds",
+          percentile_cont(0.95) WITHIN GROUP (ORDER BY EXTRACT(EPOCH FROM (lm.processing_finished_at-lm.processing_started_at)))
+            FILTER (WHERE lm.processing_finished_at IS NOT NULL AND lm.processing_started_at IS NOT NULL) AS "cycleP95Seconds",
+          percentile_cont(0.5) WITHIN GROUP (ORDER BY EXTRACT(EPOCH FROM (lm.downloaded_at-lm.first_seen_at)))
+            FILTER (WHERE lm.downloaded_at IS NOT NULL) AS "leadP50Seconds",
+          percentile_cont(0.95) WITHIN GROUP (ORDER BY EXTRACT(EPOCH FROM (lm.downloaded_at-lm.first_seen_at)))
+            FILTER (WHERE lm.downloaded_at IS NOT NULL) AS "leadP95Seconds"
+        FROM lot_media lm JOIN market_lots ml ON ml.id=lm.market_lot_id
+        WHERE lm.type=$3 AND ($1::text IS NULL OR ml.site=$1)
+      `, [site ?? null, queue, type]);
+      return result.rows[0];
+    };
+    const [revalidation, images, documents, sites] = await Promise.all([
+      this.pool.query(`
+        SELECT 'revalidation' AS queue,
+          COUNT(*) FILTER (WHERE finalized_at IS NULL AND next_check_at<=NOW())::int AS pending,
+          COUNT(*) FILTER (WHERE revalidation_started_at IS NOT NULL AND revalidation_finished_at IS NULL)::int AS processing,
+          COUNT(*) FILTER (WHERE revalidation_error IS NOT NULL AND consecutive_failures<6)::int AS failed,
+          COUNT(*) FILTER (WHERE consecutive_failures>=6)::int AS exhausted,
+          MIN(next_check_at) FILTER (WHERE finalized_at IS NULL AND next_check_at<=NOW()) AS "oldestAt",
+          COUNT(*) FILTER (WHERE revalidation_finished_at>=NOW()-INTERVAL '1 hour')::int AS "throughput1h",
+          COUNT(*) FILTER (WHERE revalidation_finished_at>=NOW()-INTERVAL '24 hours')::int AS "throughput24h",
+          percentile_cont(0.5) WITHIN GROUP (ORDER BY EXTRACT(EPOCH FROM (revalidation_finished_at-revalidation_started_at)))
+            FILTER (WHERE revalidation_finished_at IS NOT NULL AND revalidation_started_at IS NOT NULL) AS "cycleP50Seconds",
+          percentile_cont(0.95) WITHIN GROUP (ORDER BY EXTRACT(EPOCH FROM (revalidation_finished_at-revalidation_started_at)))
+            FILTER (WHERE revalidation_finished_at IS NOT NULL AND revalidation_started_at IS NOT NULL) AS "cycleP95Seconds",
+          percentile_cont(0.5) WITHIN GROUP (ORDER BY EXTRACT(EPOCH FROM (revalidation_finished_at-revalidation_due_at)))
+            FILTER (WHERE revalidation_finished_at IS NOT NULL AND revalidation_due_at IS NOT NULL) AS "leadP50Seconds",
+          percentile_cont(0.95) WITHIN GROUP (ORDER BY EXTRACT(EPOCH FROM (revalidation_finished_at-revalidation_due_at)))
+            FILTER (WHERE revalidation_finished_at IS NOT NULL AND revalidation_due_at IS NOT NULL) AS "leadP95Seconds"
+        FROM market_lots WHERE ($1::text IS NULL OR site=$1)
+      `, [site ?? null]),
+      mediaQueue('image', 'images'),
+      mediaQueue('document', 'documents'),
+      this.pool.query<{ site: string }>('SELECT DISTINCT site FROM market_lots ORDER BY site'),
+    ]);
+    return { queues: [revalidation.rows[0], images, documents], sites: sites.rows.map((row) => row.site) };
+  }
+
+  public async operationItems(queue: string, status: string | undefined, site: string | undefined, limit = 100): Promise<unknown[]> {
+    if (queue === 'revalidation') {
+      const result = await this.pool.query(`
+        SELECT id::int,'revalidation' AS queue,site,url,title,
+          CASE WHEN revalidation_started_at IS NOT NULL AND revalidation_finished_at IS NULL THEN 'processing'
+            WHEN consecutive_failures>=6 THEN 'exhausted' WHEN revalidation_error IS NOT NULL THEN 'failed'
+            WHEN next_check_at<=NOW() THEN 'pending' ELSE 'scheduled' END AS status,
+          consecutive_failures AS attempts,next_check_at AS "queuedAt",revalidation_started_at AS "startedAt",
+          revalidation_finished_at AS "finishedAt",revalidation_error AS "lastError",
+          GREATEST(0,EXTRACT(EPOCH FROM (NOW()-next_check_at)))::float AS "ageSeconds",
+          EXTRACT(EPOCH FROM (revalidation_finished_at-revalidation_started_at))::float AS "cycleSeconds",
+          EXTRACT(EPOCH FROM (revalidation_finished_at-revalidation_due_at))::float AS "leadSeconds"
+        FROM market_lots
+        WHERE ($1::text IS NULL OR site=$1) AND ($2::text IS NULL OR $2=CASE
+          WHEN revalidation_started_at IS NOT NULL AND revalidation_finished_at IS NULL THEN 'processing'
+          WHEN consecutive_failures>=6 THEN 'exhausted' WHEN revalidation_error IS NOT NULL THEN 'failed'
+          WHEN next_check_at<=NOW() THEN 'pending' ELSE 'scheduled' END)
+          AND ($2::text IS NOT NULL OR next_check_at<=NOW() OR revalidation_error IS NOT NULL)
+        ORDER BY next_check_at LIMIT $3
+      `, [site ?? null, status ?? null, limit]);
+      return result.rows;
+    }
+    const type = queue === 'documents' ? 'document' : queue === 'images' ? 'image' : undefined;
+    if (!type) return [];
+    const result = await this.pool.query(`
+      SELECT lm.id::int,$1::text AS queue,ml.site,ml.url,ml.title,
+        CASE WHEN lm.download_status='processing' THEN 'processing'
+          WHEN lm.download_attempts>=4 AND lm.download_status<>'downloaded' THEN 'exhausted'
+          WHEN lm.download_status='failed' THEN 'failed'
+          WHEN lm.download_status IN ('pending','metadata_only') THEN 'pending' ELSE lm.download_status END AS status,
+        lm.download_attempts AS attempts,lm.first_seen_at AS "queuedAt",lm.processing_started_at AS "startedAt",
+        lm.processing_finished_at AS "finishedAt",lm.download_error AS "lastError",
+        EXTRACT(EPOCH FROM (COALESCE(lm.downloaded_at,NOW())-lm.first_seen_at))::float AS "ageSeconds",
+        EXTRACT(EPOCH FROM (lm.processing_finished_at-lm.processing_started_at))::float AS "cycleSeconds",
+        EXTRACT(EPOCH FROM (lm.downloaded_at-lm.first_seen_at))::float AS "leadSeconds"
+      FROM lot_media lm JOIN market_lots ml ON ml.id=lm.market_lot_id
+      WHERE lm.type=$2 AND ($3::text IS NULL OR ml.site=$3)
+        AND ($4::text IS NULL OR $4=CASE WHEN lm.download_status='processing' THEN 'processing'
+          WHEN lm.download_attempts>=4 AND lm.download_status<>'downloaded' THEN 'exhausted'
+          WHEN lm.download_status='failed' THEN 'failed'
+          WHEN lm.download_status IN ('pending','metadata_only') THEN 'pending' ELSE lm.download_status END)
+        AND ($4::text IS NOT NULL OR lm.download_status<>'downloaded')
+      ORDER BY lm.first_seen_at LIMIT $5
+    `, [queue, type, site ?? null, status ?? null, limit]);
+    return result.rows;
+  }
+
+  public async retryOperation(queue: string, id: number): Promise<boolean> {
+    const result = queue === 'revalidation'
+      ? await this.pool.query(`UPDATE market_lots SET next_check_at=NOW(),finalized_at=NULL,revalidation_error=NULL,
+          consecutive_failures=0,revalidation_started_at=NULL,revalidation_finished_at=NULL WHERE id=$1`, [id])
+      : await this.pool.query(`UPDATE lot_media SET download_status='pending',download_attempts=0,download_error=NULL,
+          processing_started_at=NULL,processing_finished_at=NULL WHERE id=$1 AND type=$2`,
+        [id, queue === 'documents' ? 'document' : 'image']);
+    return (result.rowCount ?? 0) > 0;
+  }
+
   public async events(site?: string): Promise<unknown[]> {
     const result = await this.pool.query(`
       SELECT

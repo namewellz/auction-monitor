@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Filas e processamento · Auction Data</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <header class="site-header integrations-header">
+    <div class="header-main">
+      <a class="brand" href="/" aria-label="Auction Data"><span class="brand-symbol" aria-hidden="true"><i></i><b></b></span><span><strong>Auction</strong><small>data</small></span></a>
+      <div class="integrations-title"><span>Operação</span><strong>Filas e processamento</strong></div>
+      <div class="header-actions"><a class="header-link" href="/integrations.html">Integrações</a><a class="header-link" href="/">Dashboard</a></div>
+    </div>
+  </header>
+  <main class="operations-page">
+    <header class="operations-intro">
+      <div><span class="eyebrow">Observabilidade operacional</span><h1>Filas e processamento</h1><p>Volume parado, atrasos, throughput, cycle time e lead time de cada worker.</p></div>
+      <div class="operations-refresh"><span id="operations-updated">Carregando…</span><button id="operations-refresh" class="outline-button" type="button">Atualizar</button></div>
+    </header>
+
+    <section id="queue-cards" class="queue-cards" aria-label="Resumo das filas"></section>
+
+    <section class="operations-detail">
+      <header><div><span class="eyebrow">Itens da fila</span><h2 id="queue-title">Revalidação de anúncios</h2></div>
+        <div class="operations-filters">
+          <label>Fila<select id="queue-filter"><option value="revalidation">Revalidação</option><option value="images">Imagens</option><option value="documents">Documentos</option></select></label>
+          <label>Status<select id="status-filter"><option value="">Pendentes e falhas</option><option value="pending">Pendente</option><option value="processing">Processando</option><option value="failed">Falha</option><option value="exhausted">Tentativas esgotadas</option><option value="scheduled">Agendado</option></select></label>
+          <label>Origem<select id="site-filter"><option value="">Todos os sites</option></select></label>
+        </div>
+      </header>
+      <div class="operations-table-wrap"><table class="operations-table">
+        <thead><tr><th>Item</th><th>Status</th><th>Fila desde</th><th>Tentativas</th><th>Cycle time</th><th>Lead time</th><th>Último erro</th><th></th></tr></thead>
+        <tbody id="operations-items"><tr><td colspan="8" class="history-empty">Carregando fila…</td></tr></tbody>
+      </table></div>
+    </section>
+  </main>
+  <script src="/operations.js" defer></script>
+</body>
+</html>

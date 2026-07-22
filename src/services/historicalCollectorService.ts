@@ -67,21 +67,24 @@ export class HistoricalCollectorService {
         const item = items[cursor++];
         if (!item) continue;
         try {
+          await this.repository.markLotProcessing(item.url);
           const scraper = this.scraperFactory.forUrl(item.url);
           const data = await scraper.scrape(item.url);
           const observation = await this.repository.saveObservation(
             scraper.site, item.url, data, scheduleNextCheck(data, item.recheckCount),
           );
+          await this.repository.markLotProcessed(item.url);
           collected += 1;
           if (observation.outcome === 'new') newCount += 1;
           else if (observation.outcome === 'updated') updated += 1;
           else unchanged += 1;
         } catch (error) {
           failed += 1;
-          await this.repository.postponeFailedLot(item.url, item.recheckCount);
+          const message = error instanceof Error ? error.message : String(error);
+          await this.repository.postponeFailedLot(item.url, item.recheckCount, message);
           this.logger.error('Historical collection failed', {
             url: item.url,
-            error: error instanceof Error ? error.message : String(error),
+            error: message,
           });
         }
       }

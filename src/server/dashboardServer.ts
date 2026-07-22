@@ -51,6 +51,21 @@ export class DashboardServer {
       if (url.pathname === '/api/storage/stats' && request.method === 'GET') {
         return json(response, 200, await this.repository.storageStats());
       }
+      if (url.pathname === '/api/operations/queues' && request.method === 'GET') {
+        return json(response, 200, await this.repository.operationQueues(url.searchParams.get('site') ?? undefined));
+      }
+      if (url.pathname === '/api/operations/items' && request.method === 'GET') {
+        const queue = url.searchParams.get('queue') ?? 'revalidation';
+        const status = url.searchParams.get('status') ?? undefined;
+        const site = url.searchParams.get('site') ?? undefined;
+        return json(response, 200, await this.repository.operationItems(queue, status, site,
+          Math.min(500, positiveInt(url.searchParams.get('limit'), 100))));
+      }
+      const retryMatch = url.pathname.match(/^\/api\/operations\/retry\/(revalidation|images|documents)\/(\d+)$/);
+      if (retryMatch?.[1] && retryMatch[2] && request.method === 'POST') {
+        const retried = await this.repository.retryOperation(retryMatch[1], Number(retryMatch[2]));
+        return retried ? json(response, 202, { retried: true }) : json(response, 404, { error: 'Item não encontrado.' });
+      }
       if (url.pathname === '/api/collection/history' && request.method === 'GET') {
         const limit = Math.min(50, positiveInt(url.searchParams.get('limit'), 10));
         return json(response, 200, await this.repository.collectionRuns(

@@ -148,6 +148,11 @@ export async function runPostgresMigrations(pool: Pool): Promise<void> {
     ALTER TABLE market_lots ADD COLUMN IF NOT EXISTS key_available TEXT;
     ALTER TABLE market_lots ADD COLUMN IF NOT EXISTS locks TEXT;
     ALTER TABLE market_lots ADD COLUMN IF NOT EXISTS windows TEXT;
+    ALTER TABLE market_lots ADD COLUMN IF NOT EXISTS revalidation_started_at TIMESTAMPTZ;
+    ALTER TABLE market_lots ADD COLUMN IF NOT EXISTS revalidation_due_at TIMESTAMPTZ;
+    ALTER TABLE market_lots ADD COLUMN IF NOT EXISTS revalidation_finished_at TIMESTAMPTZ;
+    ALTER TABLE market_lots ADD COLUMN IF NOT EXISTS revalidation_error TEXT;
+    ALTER TABLE market_lots ADD COLUMN IF NOT EXISTS consecutive_failures INTEGER NOT NULL DEFAULT 0;
     ALTER TABLE lot_snapshots ADD COLUMN IF NOT EXISTS bidder_alias TEXT;
 
     UPDATE market_lots SET asset_type='car'
@@ -211,6 +216,13 @@ export async function runPostgresMigrations(pool: Pool): Promise<void> {
     ALTER TABLE lot_media ADD COLUMN IF NOT EXISTS storage_bucket TEXT;
     ALTER TABLE lot_media ADD COLUMN IF NOT EXISTS archived_at TIMESTAMPTZ;
     ALTER TABLE lot_media ADD COLUMN IF NOT EXISTS last_accessed_at TIMESTAMPTZ;
+    ALTER TABLE lot_media ADD COLUMN IF NOT EXISTS processing_started_at TIMESTAMPTZ;
+    ALTER TABLE lot_media ADD COLUMN IF NOT EXISTS processing_finished_at TIMESTAMPTZ;
+    ALTER TABLE lot_media ADD COLUMN IF NOT EXISTS last_attempt_at TIMESTAMPTZ;
+
+    UPDATE lot_media SET download_status='failed',processing_finished_at=NOW(),
+      download_error=COALESCE(download_error,'Processamento interrompido antes da conclusão.')
+    WHERE download_status='processing';
 
     CREATE TABLE IF NOT EXISTS real_estate_details (
       market_lot_id BIGINT PRIMARY KEY REFERENCES market_lots(id) ON DELETE CASCADE,

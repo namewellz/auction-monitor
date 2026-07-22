@@ -52,12 +52,7 @@ export class CatalogCollectionService {
 
     try {
       for (const provider of selected) await this.collectProvider(provider, visited);
-      const media = await this.mediaStorage.downloadPending();
       Object.assign(this.progress, {
-        mediaQueued: media.queued,
-        mediaDownloaded: media.downloaded,
-        mediaFailed: media.failed,
-        mediaBytes: media.bytes,
         running: false,
         finishedAt: new Date().toISOString(),
       });
@@ -70,6 +65,13 @@ export class CatalogCollectionService {
         unchanged: this.progress.unchanged,
       });
       this.logger.info('Catalog collection completed', { ...this.progress });
+      void this.mediaStorage.downloadPending().then((media) => {
+        this.logger.info('Catalog media processed asynchronously', { ...media });
+      }).catch((error: unknown) => {
+        this.logger.error('Catalog media processing failed', {
+          error: error instanceof Error ? error.message : String(error),
+        });
+      });
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       Object.assign(this.progress, { running: false, finishedAt: new Date().toISOString(), lastError: message });

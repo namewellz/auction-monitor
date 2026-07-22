@@ -86,6 +86,7 @@ export class MediaStorageService {
         const item = items[cursor++];
         if (!item) continue;
         try {
+          await this.repository.markMediaProcessing(item.id);
           const size = await this.download(item);
           result.downloaded += 1;
           result.bytes += size;
@@ -116,6 +117,7 @@ export class MediaStorageService {
         const item = items[cursor++];
         if (!item) continue;
         try {
+          await this.repository.markMediaProcessing(item.id);
           result.bytes += await this.downloadDocument(item);
           result.downloaded += 1;
         } catch (error) {

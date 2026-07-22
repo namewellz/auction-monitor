@@ -188,11 +188,26 @@ export class HistoricalRepository {
     return result.rows.map((row) => ({ url: row.url, recheckCount: row.recheck_count }));
   }
 
-  public async postponeFailedLot(url: string, recheckCount: number): Promise<void> {
+  public async postponeFailedLot(url: string, recheckCount: number, error = 'Falha ao consultar o anúncio.'): Promise<void> {
     const delayMinutes = Math.min(1440, 30 * 2 ** Math.min(recheckCount, 5));
     await this.pool.query(
-      `UPDATE market_lots SET next_check_at=NOW()+($1 * INTERVAL '1 minute'), recheck_count=recheck_count+1 WHERE url=$2`,
-      [delayMinutes, url],
+      `UPDATE market_lots SET next_check_at=NOW()+($1 * INTERVAL '1 minute'),recheck_count=recheck_count+1,
+       revalidation_finished_at=NOW(),revalidation_error=$3,consecutive_failures=consecutive_failures+1 WHERE url=$2`,
+      [delayMinutes, url, error.slice(0, 1000)],
+    );
+  }
+
+  public async markLotProcessing(url: string): Promise<void> {
+    await this.pool.query(
+      `UPDATE market_lots SET revalidation_started_at=NOW(),revalidation_due_at=next_check_at,
+       revalidation_finished_at=NULL WHERE url=$1`, [url],
+    );
+  }
+
+  public async markLotProcessed(url: string): Promise<void> {
+    await this.pool.query(
+      `UPDATE market_lots SET revalidation_finished_at=NOW(),revalidation_error=NULL,consecutive_failures=0 WHERE url=$1`,
+      [url],
     );
   }
 
@@ -277,7 +292,8 @@ export class HistoricalRepository {
        original_size_bytes=$6,image_width=$7,image_height=$8,optimization_profile=$9,optimized_at=NOW(),
        optimization_attempts=optimization_attempts+1,optimization_error=NULL,
        storage_provider='oracle-minio',storage_tier='hot',
-       download_status='downloaded',download_attempts=download_attempts+1,download_error=NULL,downloaded_at=NOW()
+       download_status='downloaded',download_attempts=download_attempts+1,download_error=NULL,downloaded_at=NOW(),
+       processing_finished_at=NOW()
        WHERE id=$10`,
       [media.storageKey, media.contentHash, media.contentType, media.sizeBytes, media.etag ?? null,
         media.originalSizeBytes, media.imageWidth, media.imageHeight, media.optimizationProfile, id],
@@ -331,7 +347,8 @@ export class HistoricalRepository {
 
   public async markMediaFailed(id: number, error: string): Promise<void> {
     await this.pool.query(
-      `UPDATE lot_media SET download_status='failed',download_attempts=download_attempts+1,download_error=$1 WHERE id=$2`,
+      `UPDATE lot_media SET download_status='failed',download_attempts=download_attempts+1,download_error=$1,
+       processing_finished_at=NOW() WHERE id=$2`,
       [error.slice(0, 1000), id],
     );
   }
@@ -387,6 +404,13 @@ export class HistoricalRepository {
     return (result.rowCount ?? 0) > 0;
   }
 
+  public async markMediaProcessing(id: number): Promise<void> {
+    await this.pool.query(
+      `UPDATE lot_media SET download_status='processing',processing_started_at=NOW(),processing_finished_at=NULL,
+       last_attempt_at=NOW() WHERE id=$1`, [id],
+    );
+  }
+
   public async listPendingDocuments(limit: number): Promise<PendingDocument[]> {
     const result = await this.pool.query<{
       id: string; source_url: string; download_attempts: number; label: string | null; document_type: string | null;
@@ -407,7 +431,8 @@ export class HistoricalRepository {
     await this.pool.query(
       `UPDATE lot_media SET storage_key=$1,content_hash=$2,content_type=$3,size_bytes=$4,etag=$5,
        original_size_bytes=$4,storage_provider='oracle-minio',storage_tier='hot',storage_bucket=$6,
-       download_status='downloaded',download_attempts=download_attempts+1,download_error=NULL,downloaded_at=NOW()
+       download_status='downloaded',download_attempts=download_attempts+1,download_error=NULL,downloaded_at=NOW(),
+       processing_finished_at=NOW()
        WHERE id=$7`,
       [document.storageKey, document.contentHash, document.contentType, document.sizeBytes,
         document.etag ?? null, bucket, id],

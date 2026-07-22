@@ -194,6 +194,7 @@ async function loadSourceNav() {
   const counts = Object.fromEntries(catalogs.map((item) => [item.catalog, item.lotCount]));
   byId('source-nav').innerHTML = [['vehicles', 'Veículos'], ['real_estate', 'Imóveis']]
     .map(([catalog, label]) => `<button class="source-tab" type="button" data-catalog="${catalog}">${label}<small>${number(counts[catalog] || 0)}</small></button>`).join('')
+    + `<a class="source-tab" href="/operations.html">Filas</a>`
     + `<a class="source-tab integrations-tab" href="/integrations.html">Integrações<small>${integrations.length}</small></a>`;
   reflectStateInControls();
 }

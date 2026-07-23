@@ -69,7 +69,7 @@ export class HistoricalCollectorService {
         try {
           await this.repository.markLotProcessing(item.url);
           const scraper = this.scraperFactory.forUrl(item.url);
-          const data = await scraper.scrape(item.url);
+          const data = await withTimeout(scraper.scrape(item.url), 60_000, `Tempo limite excedido ao consultar ${item.url}`);
           const observation = await this.repository.saveObservation(
             scraper.site, item.url, data, scheduleNextCheck(data, item.recheckCount),
           );
@@ -93,4 +93,14 @@ export class HistoricalCollectorService {
     await Promise.all(workers);
     return { discovered: items.length, collected, failed, new: newCount, updated, unchanged };
   }
+}
+
+function withTimeout<T>(promise: Promise<T>, timeoutMs: number, message: string): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error(message)), timeoutMs);
+    promise.then(
+      (value) => { clearTimeout(timer); resolve(value); },
+      (error: unknown) => { clearTimeout(timer); reject(error); },
+    );
+  });
 }

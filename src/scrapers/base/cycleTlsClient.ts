@@ -3,9 +3,11 @@ import initCycleTLS from 'cycletls';
 export interface FetchHtmlOptions {
   headers?: Record<string, string>;
   allowNativeFallback?: boolean;
+  preferNative?: boolean;
 }
 
 export async function fetchHtml(url: string, options: FetchHtmlOptions = {}): Promise<string> {
+  if (options.preferNative) return fetchHtmlNative(url, options.headers);
   const cycleTLS = await initCycleTLS();
 
   try {
@@ -48,6 +50,7 @@ async function fetchHtmlNative(url: string, headers: Record<string, string> = {}
         'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36',
       ...headers,
     },
+    signal: AbortSignal.timeout(45_000),
   });
 
   if (!response.ok) {

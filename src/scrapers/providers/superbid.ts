@@ -66,7 +66,7 @@ export class SuperbidScraper implements AuctionScraper {
   }
 
   public async scrape(url: string): Promise<LotData> {
-    const html = await fetchHtml(url, { allowNativeFallback: true });
+    const html = await fetchHtml(url, { allowNativeFallback: true, preferNative: true });
     const $ = cheerio.load(html);
     const offer = extractOffer($);
     const descriptionText = htmlToText(offer.offerDescription?.offerDescription ?? '');

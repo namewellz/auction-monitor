@@ -153,6 +153,10 @@ export async function runPostgresMigrations(pool: Pool): Promise<void> {
     ALTER TABLE market_lots ADD COLUMN IF NOT EXISTS revalidation_finished_at TIMESTAMPTZ;
     ALTER TABLE market_lots ADD COLUMN IF NOT EXISTS revalidation_error TEXT;
     ALTER TABLE market_lots ADD COLUMN IF NOT EXISTS consecutive_failures INTEGER NOT NULL DEFAULT 0;
+    UPDATE market_lots SET revalidation_finished_at=NOW(),next_check_at=NOW(),
+      revalidation_error=COALESCE(revalidation_error,'Processamento interrompido antes da conclusão.'),
+      consecutive_failures=consecutive_failures+1
+    WHERE revalidation_started_at IS NOT NULL AND revalidation_finished_at IS NULL;
     ALTER TABLE lot_snapshots ADD COLUMN IF NOT EXISTS bidder_alias TEXT;
 
     UPDATE market_lots SET asset_type='car'

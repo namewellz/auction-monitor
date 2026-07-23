@@ -1,5 +1,6 @@
 const facetConfig = [
   { key: 'site', param: 'site', label: 'Origem', open: true },
+  { key: 'assetType', param: 'assetType', label: 'Tipo de veículo', open: true, catalog: 'vehicles', allowedValues: ['car', 'motorcycle', 'heavy'] },
   { key: 'propertyType', param: 'propertyType', label: 'Tipo de imóvel', open: true, searchable: true, catalog: 'real_estate' },
   { key: 'brand', param: 'brand', label: 'Marca', open: true, searchable: true, catalog: 'vehicles' },
   { key: 'model', param: 'model', label: 'Modelo', open: true, searchable: true, catalog: 'vehicles' },
@@ -322,7 +323,7 @@ function renderFacets() {
     const sourceOptions = [...new Map((state.facets[config.key] || []).map((option) => {
       const value = String(option.value).trim();
       return [value, { ...option, value }];
-    })).values()];
+    })).values()].filter((option) => !config.allowedValues || config.allowedValues.includes(option.value));
     if (config.key === 'year') sourceOptions.sort((left, right) => Number(right.value) - Number(left.value));
     const options = [...sourceOptions];
     selected.forEach((value) => {
@@ -541,21 +542,24 @@ function hydrateStateFromUrl() {
   state.view = params.get('view') === 'list' ? 'list' : 'grid';
   state.sort = ['auction_nearest', 'auction_desc', 'auction_asc', 'year_desc', 'year_asc', 'brand_asc', 'brand_desc'].includes(params.get('sort')) ? params.get('sort') : 'auction_nearest';
   facetConfig.forEach((config) => {
-    state.filters[config.key] = [...new Set(params.getAll(config.param).flatMap((value) => value.split(',')).filter(Boolean))];
+    const values = [...new Set(params.getAll(config.param).flatMap((value) => value.split(',')).filter(Boolean))];
+    state.filters[config.key] = config.key === 'assetType' && ['car', 'motorcycle', 'heavy'].every((value) => values.includes(value)) ? [] : values;
   });
 }
 
 function buildParams(includePage) {
   const params = new URLSearchParams();
   params.set('catalog', state.catalog);
-  (state.catalog === 'real_estate' ? ['real_estate'] : ['car', 'motorcycle', 'heavy'])
+  const selectedAssetTypes = state.filters.assetType || [];
+  (state.catalog === 'real_estate' ? ['real_estate'] : selectedAssetTypes.length ? selectedAssetTypes : ['car', 'motorcycle', 'heavy'])
     .forEach((value) => params.append('assetType', value));
   if (state.search) params.set('search', state.search);
   if (state.eventDateFrom) params.set('eventDateFrom', state.eventDateFrom);
   if (state.eventDateTo) params.set('eventDateTo', state.eventDateTo);
   if (state.endingWindowDays === 3) params.set('endingWindowDays', '3');
   if (state.sort !== 'auction_nearest') params.set('sort', state.sort);
-  facetConfig.forEach((config) => state.filters[config.key].forEach((value) => params.append(config.param, value)));
+  facetConfig.filter((config) => config.key !== 'assetType')
+    .forEach((config) => state.filters[config.key].forEach((value) => params.append(config.param, value)));
   if (includePage) {
     params.set('page', state.page);
     params.set('pageSize', state.pageSize);

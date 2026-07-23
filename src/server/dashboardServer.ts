@@ -52,12 +52,12 @@ export class DashboardServer {
         return json(response, 200, await this.repository.storageStats());
       }
       if (url.pathname === '/api/operations/queues' && request.method === 'GET') {
-        return json(response, 200, await this.repository.operationQueues(url.searchParams.get('site') ?? undefined));
+        return json(response, 200, await this.repository.operationQueues(optionalParam(url, 'site')));
       }
       if (url.pathname === '/api/operations/items' && request.method === 'GET') {
         const queue = url.searchParams.get('queue') ?? 'revalidation';
-        const status = url.searchParams.get('status') ?? undefined;
-        const site = url.searchParams.get('site') ?? undefined;
+        const status = optionalParam(url, 'status');
+        const site = optionalParam(url, 'site');
         return json(response, 200, await this.repository.operationItems(queue, status, site,
           Math.min(500, positiveInt(url.searchParams.get('limit'), 100))));
       }
@@ -132,6 +132,10 @@ export class DashboardServer {
       json(response, 500, { error: 'Erro interno.' });
     }
   }
+}
+
+function optionalParam(url: URL, name: string): string | undefined {
+  return url.searchParams.get(name)?.trim() || undefined;
 }
 
 async function serveStatic(pathname: string, response: ServerResponse): Promise<void> {

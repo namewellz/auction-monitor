@@ -23,7 +23,7 @@ async function loadAll(showLoading = true) {
     const query = site ? `?site=${encodeURIComponent(site)}` : '';
     const [queuesResponse, itemsResponse] = await Promise.all([
       fetch(`/api/operations/queues${query}`),
-      fetch(`/api/operations/items?queue=${encodeURIComponent(queue)}&status=${encodeURIComponent(status)}&site=${encodeURIComponent(site)}&limit=150`),
+      fetch(`/api/operations/items?queue=${encodeURIComponent(queue)}&status=${encodeURIComponent(status)}&site=${encodeURIComponent(site)}&limit=500`),
     ]);
     if (!queuesResponse.ok || !itemsResponse.ok) throw new Error('Não foi possível consultar as filas.');
     const summary = await queuesResponse.json();
@@ -31,7 +31,10 @@ async function loadAll(showLoading = true) {
     renderSites(summary.sites, site);
     renderQueues(summary.queues, queue);
     renderItems(items);
-    document.getElementById('queue-title').textContent = queueNames[queue];
+    const selectedStatus = status ? statusNames[status] : 'Pendentes e falhas';
+    const selectedSite = site ? siteLabel(site) : 'Todos os sites';
+    document.getElementById('queue-title').textContent =
+      `${queueNames[queue]} · ${selectedStatus} · ${selectedSite} (${number(items.length)})`;
     document.getElementById('operations-updated').textContent = `Atualizado ${new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}`;
   } catch (error) {
     document.getElementById('operations-items').innerHTML = `<tr><td colspan="8" class="history-empty">${escapeHtml(error.message)}</td></tr>`;

@@ -65,34 +65,51 @@ export class AlessandroTeixeiraRealEstateCatalogProvider implements CatalogProvi
   }
 
   public async scrapeLot(url: string): Promise<LotData> {
-    const lotId = Number(/\/lote\/(\d+)/i.exec(new URL(url).pathname)?.[1]);
+    const pathname = new URL(url).pathname;
+    const lotId = Number(/\/lote\/(\d+)/i.exec(pathname)?.[1]);
+    const auctionId = Number(/\/leilao_id\/(\d+)/i.exec(pathname)?.[1]);
     if (!Number.isInteger(lotId) || lotId <= 0) throw new Error(`VLance lot id not found in URL: ${url}`);
+    if (Number.isInteger(auctionId) && auctionId > 0) {
+      const payload = await this.fetchLots(new URLSearchParams({
+        pg: '1',
+        tipo: 'imoveis',
+        leilao_id: String(auctionId),
+      }));
+      const lot = (payload.items ?? []).find((candidate) => candidate.lote_id === lotId);
+      if (lot) return this.mapRealEstateLot(lot);
+    }
     let page = 1;
     while (page <= 100) {
       if (page > 1) await sleep(this.requestIntervalMs);
-      const response = await fetch(this.apiUrl, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/x-www-form-urlencoded',
-          'User-Agent': 'Mozilla/5.0 (compatible; AuctionMonitor/1.0)',
-          Referer: this.source,
-        },
-        body: new URLSearchParams({ pg: String(page), tipo: 'imoveis' }),
-        signal: AbortSignal.timeout(30_000),
-      });
-      if (!response.ok) throw new Error(`VLance API failed: HTTP ${response.status}`);
-      const payload = await response.json() as ApiResponse;
+      const payload = await this.fetchLots(new URLSearchParams({ pg: String(page), tipo: 'imoveis' }));
       const lot = (payload.items ?? []).find((candidate) => candidate.lote_id === lotId);
-      if (lot) {
-        if (lot.id_categoria !== REAL_ESTATE_CATEGORY_ID) {
-          throw new Error(`VLance lot ${lotId} is not a real-estate lot`);
-        }
-        return mapLot(lot, this.baseUrl);
-      }
+      if (lot) return this.mapRealEstateLot(lot);
       if (page >= payload.totalPages) break;
       page += 1;
     }
     throw new Error(`VLance lot ${lotId} was not found in the catalog API`);
+  }
+
+  private async fetchLots(body: URLSearchParams): Promise<ApiResponse> {
+    const response = await fetch(this.apiUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'User-Agent': 'Mozilla/5.0 (compatible; AuctionMonitor/1.0)',
+        Referer: this.source,
+      },
+      body,
+      signal: AbortSignal.timeout(30_000),
+    });
+    if (!response.ok) throw new Error(`VLance API failed: HTTP ${response.status}`);
+    return response.json() as Promise<ApiResponse>;
+  }
+
+  private mapRealEstateLot(lot: ApiLot): LotData {
+    if (lot.id_categoria !== REAL_ESTATE_CATEGORY_ID) {
+      throw new Error(`VLance lot ${lot.lote_id} is not a real-estate lot`);
+    }
+    return mapLot(lot, this.baseUrl);
   }
 }
 

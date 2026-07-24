@@ -10,6 +10,9 @@ export interface RevalidationSchedule {
 }
 
 export function scheduleNextCheck(data: LotData, recheckCount = 0, now = new Date()): RevalidationSchedule {
+  if (isTerminalWithoutSale(data.saleStatus)) {
+    return { nextCheckAt: now, finalizedAt: now };
+  }
   const remaining = data.auctionEnd.getTime() - now.getTime();
   if (remaining > 0) {
     return { nextCheckAt: new Date(now.getTime() + preAuctionInterval(remaining)) };
@@ -42,4 +45,9 @@ function preAuctionInterval(remaining: number): number {
 function isFinalStatus(status: string | undefined): boolean {
   if (!status) return false;
   return /sold|vendido|arrematado|closed|encerrado|finalizado/i.test(status);
+}
+
+function isTerminalWithoutSale(status: string | undefined): boolean {
+  if (!status) return false;
+  return /withdrawn|removed|cancelled|canceled|excluded|retirado|removido|cancelado|exclu[ií]do/i.test(status);
 }

@@ -170,12 +170,30 @@ export class HistoricalRepository {
     }
   }
 
-  public async listDueLots(limit: number): Promise<DueMarketLot[]> {
+  public async claimDueLots(limit: number): Promise<DueMarketLot[]> {
     const result = await this.pool.query<{
       id: string; site: string; url: string; auction_end: Date; recheck_count: number;
     }>(
-      `SELECT id, site, url, auction_end, recheck_count FROM market_lots
-       WHERE finalized_at IS NULL AND next_check_at <= NOW() ORDER BY next_check_at LIMIT $1`,
+      `WITH ranked AS MATERIALIZED (
+         SELECT id,next_check_at,
+           ROW_NUMBER() OVER (PARTITION BY site ORDER BY next_check_at) AS site_rank
+         FROM market_lots
+         WHERE finalized_at IS NULL AND next_check_at <= NOW()
+           AND (revalidation_started_at IS NULL OR revalidation_finished_at IS NOT NULL)
+       ),
+       due AS (
+         SELECT lot.id FROM market_lots AS lot
+         JOIN ranked ON ranked.id=lot.id
+         ORDER BY ranked.site_rank,ranked.next_check_at
+         FOR UPDATE OF lot SKIP LOCKED
+         LIMIT $1
+       )
+       UPDATE market_lots AS lot SET
+         revalidation_started_at=NOW(),
+         revalidation_due_at=lot.next_check_at,
+         revalidation_finished_at=NULL
+       FROM due WHERE lot.id=due.id
+       RETURNING lot.id,lot.site,lot.url,lot.auction_end,lot.recheck_count`,
       [limit],
     );
     return result.rows.map((row) => ({

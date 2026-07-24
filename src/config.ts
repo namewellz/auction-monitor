@@ -9,6 +9,8 @@ export interface AppConfig {
   collectorCron: string;
   collectorBatchSize: number;
   collectorConcurrency: number;
+  collectorIdlePollMs: number;
+  collectorSiteIntervalMs: number;
   collectorMaxDiscoveryPages: number;
   collectorMaxDiscoveryDepth: number;
   collectorSourceIntervalMinutes: number;
@@ -100,6 +102,8 @@ export const config: AppConfig = {
   collectorCron: process.env.COLLECTOR_CRON ?? '*/5 * * * *',
   collectorBatchSize: parsePositiveInt(process.env.COLLECTOR_BATCH_SIZE, 100),
   collectorConcurrency: parsePositiveInt(process.env.COLLECTOR_CONCURRENCY, 4),
+  collectorIdlePollMs: parsePositiveInt(process.env.COLLECTOR_IDLE_POLL_MS, 5000),
+  collectorSiteIntervalMs: parsePositiveInt(process.env.COLLECTOR_SITE_INTERVAL_MS, 750),
   collectorMaxDiscoveryPages: parsePositiveInt(process.env.COLLECTOR_MAX_DISCOVERY_PAGES, 40),
   collectorMaxDiscoveryDepth: parsePositiveInt(process.env.COLLECTOR_MAX_DISCOVERY_DEPTH, 2),
   collectorSourceIntervalMinutes: parsePositiveInt(process.env.COLLECTOR_SOURCE_INTERVAL_MINUTES, 360),

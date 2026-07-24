@@ -31,6 +31,7 @@ const collector = new HistoricalCollectorService(repository, scraperFactory, dis
   maxDiscoveryPages: config.collectorMaxDiscoveryPages,
   maxDiscoveryDepth: config.collectorMaxDiscoveryDepth,
   concurrency: config.collectorConcurrency,
+  siteIntervalMs: config.collectorSiteIntervalMs,
 });
 
 for (const sourceUrl of config.collectorSources) {
@@ -45,12 +46,13 @@ const scheduler = new HistoricalCollectorScheduler(
   mediaStorage,
   logger,
   config.collectorBatchSize,
+  config.collectorIdlePollMs,
 );
 scheduler.start();
 
 async function shutdown(signal: string): Promise<void> {
   logger.info('Historical collector shutting down', { signal });
-  scheduler.stop();
+  await scheduler.stop();
   await pool.end();
   process.exit(0);
 }

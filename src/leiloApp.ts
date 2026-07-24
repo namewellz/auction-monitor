@@ -82,6 +82,7 @@ const historicalCollector = new HistoricalCollectorService(
     maxDiscoveryPages: config.collectorMaxDiscoveryPages,
     maxDiscoveryDepth: config.collectorMaxDiscoveryDepth,
     concurrency: config.collectorConcurrency,
+    siteIntervalMs: config.collectorSiteIntervalMs,
   },
 );
 const historicalScheduler = new HistoricalCollectorScheduler(
@@ -91,6 +92,7 @@ const historicalScheduler = new HistoricalCollectorScheduler(
   mediaStorage,
   logger,
   config.collectorBatchSize,
+  config.collectorIdlePollMs,
 );
 const server = new DashboardServer(
   new DashboardRepository(pool), bulkCollector, mediaStorage, logger, integrationDefinitions(config.leiloApiUrl),
@@ -103,7 +105,7 @@ if (config.catalogCollectOnStart) void bulkCollector.collectAll('leilo');
 
 async function shutdown(signal: string): Promise<void> {
   logger.info('Leilo dashboard shutting down', { signal });
-  historicalScheduler.stop();
+  await historicalScheduler.stop();
   await pool.end();
   process.exit(0);
 }

@@ -21,7 +21,7 @@ export class CalilRealEstateCatalogProvider implements CatalogProvider {
       .map((_, element) => absolute($(element).attr('href') ?? '')).get());
     const lots = [];
     for (const detailUrl of detailUrls) {
-      const data = await this.detail(detailUrl);
+      const data = await this.scrapeLot(detailUrl);
       lots.push({ url: detailUrl, data, classification: 'Imóveis', assetType: 'real_estate' as const });
       if (this.requestIntervalMs > 0) await sleep(this.requestIntervalMs);
     }
@@ -30,7 +30,7 @@ export class CalilRealEstateCatalogProvider implements CatalogProvider {
     return { page, pageSize, total, hasNext, lots };
   }
 
-  private async detail(url: string): Promise<LotData> {
+  public async scrapeLot(url: string): Promise<LotData> {
     const response = await fetch(url, { headers: headers(), signal: AbortSignal.timeout(30_000) });
     if (!response.ok) throw new Error(`Calil lot detail failed: HTTP ${response.status}`);
     const $ = cheerio.load(await response.text());
@@ -133,10 +133,10 @@ function normalizePropertyType(value: string): string {
   const normalized = normalize(value);
   if (/apartamento|apto\b/.test(normalized)) return 'apartamento';
   if (/casa|sobrado|residencia/.test(normalized)) return 'casa';
+  if (/galpao|barracao/.test(normalized)) return 'galpao';
   if (/terreno|lote\b|gleba|urbano/.test(normalized)) return 'terreno';
   if (/loja|sala|predio|comercial|industrial|negocio/.test(normalized)) return 'comercial';
   if (/sitio|fazenda|chacara|rural/.test(normalized)) return 'rural';
-  if (/galpao|barracao/.test(normalized)) return 'galpao';
   return 'outro';
 }
 function documentType(label: string): string {

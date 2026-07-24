@@ -4,6 +4,12 @@ import { LeiloScraper } from './providers/leilo.js';
 import { SuperbidScraper } from './providers/superbid.js';
 import { VipLeiloesScraper } from './providers/vipLeiloes.js';
 import { FrancoRealEstateScraper } from './providers/francoRealEstate.js';
+import { CalilRealEstateScraper } from './providers/calilRealEstate.js';
+import { D1LanceRealEstateScraper } from './providers/d1LanceRealEstate.js';
+import {
+  VlanceRealEstateScraper,
+  vlanceRealEstateDefinitions,
+} from './providers/vlanceRealEstate.js';
 import type { VipLeiloesClient } from './providers/vipLeiloesClient.js';
 import { ScraperFactory } from './scraperFactory.js';
 
@@ -16,6 +22,9 @@ export function createScraperFactory(
     new LeiloScraper(),
     new SuperbidScraper(),
     new FrancoRealEstateScraper(),
+    new CalilRealEstateScraper(),
+    new D1LanceRealEstateScraper(),
+    ...vlanceRealEstateDefinitions.map((definition) => new VlanceRealEstateScraper(definition)),
     new ExampleSiteScraper(config.exampleScraperHosts),
   ]);
 }

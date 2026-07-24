@@ -63,6 +63,37 @@ export class AlessandroTeixeiraRealEstateCatalogProvider implements CatalogProvi
       lots,
     };
   }
+
+  public async scrapeLot(url: string): Promise<LotData> {
+    const lotId = Number(/\/lote\/(\d+)/i.exec(new URL(url).pathname)?.[1]);
+    if (!Number.isInteger(lotId) || lotId <= 0) throw new Error(`VLance lot id not found in URL: ${url}`);
+    let page = 1;
+    while (page <= 100) {
+      if (page > 1) await sleep(this.requestIntervalMs);
+      const response = await fetch(this.apiUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+          'User-Agent': 'Mozilla/5.0 (compatible; AuctionMonitor/1.0)',
+          Referer: this.source,
+        },
+        body: new URLSearchParams({ pg: String(page), tipo: 'imoveis' }),
+        signal: AbortSignal.timeout(30_000),
+      });
+      if (!response.ok) throw new Error(`VLance API failed: HTTP ${response.status}`);
+      const payload = await response.json() as ApiResponse;
+      const lot = (payload.items ?? []).find((candidate) => candidate.lote_id === lotId);
+      if (lot) {
+        if (lot.id_categoria !== REAL_ESTATE_CATEGORY_ID) {
+          throw new Error(`VLance lot ${lotId} is not a real-estate lot`);
+        }
+        return mapLot(lot, this.baseUrl);
+      }
+      if (page >= payload.totalPages) break;
+      page += 1;
+    }
+    throw new Error(`VLance lot ${lotId} was not found in the catalog API`);
+  }
 }
 
 function mapLot(lot: ApiLot, baseUrl: string): LotData {

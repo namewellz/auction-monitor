@@ -22,14 +22,14 @@ export class D1LanceRealEstateCatalogProvider implements CatalogProvider {
     const pageUrls = urls.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
     const lots = [];
     for (const url of pageUrls) {
-      const data = await this.detail(url);
+      const data = await this.scrapeLot(url);
       if (data.assetType === 'real_estate') lots.push({ url, data, classification: 'Imóveis', assetType: 'real_estate' as const });
       if (this.requestIntervalMs > 0) await sleep(this.requestIntervalMs);
     }
     return { page, pageSize: PAGE_SIZE, total: urls.length, hasNext: page * PAGE_SIZE < urls.length, lots };
   }
 
-  private async detail(url: string): Promise<LotData> {
+  public async scrapeLot(url: string): Promise<LotData> {
     const response = await fetch(url, { headers: headers(), signal: AbortSignal.timeout(60_000) });
     if (!response.ok) throw new Error(`D1 Lance lot detail failed: HTTP ${response.status}`);
     const $ = cheerio.load(await response.text());

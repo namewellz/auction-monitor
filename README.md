@@ -100,6 +100,27 @@ todos os sites presentes e futuros. O perfil padrao limita a imagem a `1280x960`
 e usa qualidade 70. Ele pode ser ajustado com `MEDIA_IMAGE_MAX_WIDTH`,
 `MEDIA_IMAGE_MAX_HEIGHT` e `MEDIA_IMAGE_QUALITY`.
 
+### Monitoramento de filas
+
+O endpoint `GET /api/operations/problems` expoe os itens pendentes, com falha ou esgotados
+das filas de revalidacao, imagens e documentos. A resposta inclui paginacao, totais por
+status, fila e origem, alem dos erros mais frequentes agrupados.
+
+Filtros aceitos:
+
+- `queue`: `revalidation`, `images` ou `documents`; aceita repeticao ou valores separados por virgula.
+- `status`: `pending`, `failed` ou `exhausted`; aceita repeticao ou valores separados por virgula.
+- `site`: identificador da origem.
+- `minAgeMinutes`: idade minima do item parado.
+- `limit`: quantidade por pagina, de 1 a 500.
+- `offset`: deslocamento da pagina.
+
+Exemplo:
+
+```text
+/api/operations/problems?queue=revalidation&status=failed,exhausted&minAgeMinutes=30&limit=100
+```
+
 Para migrar imagens antigas ao perfil configurado:
 
 ```bash

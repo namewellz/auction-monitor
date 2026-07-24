@@ -169,8 +169,28 @@ export class MediaStorageService {
     const media = await this.repository.getMedia(mediaId);
     if (!media) return undefined;
     if (!media.storageKey || media.downloadStatus !== 'downloaded') return { fallbackUrl: media.sourceUrl };
+    let stream: Readable;
+    try {
+      stream = await this.client.getObject(this.options.bucket, media.storageKey);
+    } catch (error) {
+      void this.record('get', media.mediaType, media.site, false);
+      throw error;
+    }
+    let bytes = 0;
+    let recorded = false;
+    stream.on('data', (chunk: Buffer | string) => { bytes += Buffer.byteLength(chunk); });
+    stream.once('end', () => {
+      if (recorded) return;
+      recorded = true;
+      void this.record('get', media.mediaType, media.site, true, { bytesOut: bytes });
+    });
+    stream.once('error', () => {
+      if (recorded) return;
+      recorded = true;
+      void this.record('get', media.mediaType, media.site, false, { bytesOut: bytes });
+    });
     return {
-      stream: await this.client.getObject(this.options.bucket, media.storageKey),
+      stream,
       contentType: media.contentType ?? 'application/octet-stream',
     };
   }
@@ -191,7 +211,7 @@ export class MediaStorageService {
     if (body.length === 0) throw new Error('Empty image');
 
     const optimized = await this.imageOptimizer.optimize(body);
-    const stored = await this.storeOptimized(optimized, item.sourceUrl);
+    const stored = await this.storeOptimized(optimized, item.sourceUrl, item.site);
     await this.repository.markMediaDownloaded(item.id, stored);
     return optimized.buffer.length;
   }
@@ -215,14 +235,23 @@ export class MediaStorageService {
     let etag: string | undefined;
     try {
       etag = (await this.client.statObject(this.options.bucket, storageKey)).etag;
-    } catch {
-      etag = (await this.client.putObject(this.options.bucket, storageKey, body, body.length, {
-        'Content-Type': contentType,
-        'x-amz-meta-source-url': item.sourceUrl,
-        'x-amz-meta-document-type': item.documentType ?? 'other',
-        // S3 metadata headers must remain ASCII; preserve the original label URL-encoded.
-        'x-amz-meta-label': encodeURIComponent(item.label ?? 'Documento'),
-      })).etag;
+      void this.record('head', 'document', item.site, true);
+    } catch (error) {
+      void this.record('head', 'document', item.site, false);
+      if (!isNotFound(error)) throw error;
+      try {
+        etag = (await this.client.putObject(this.options.bucket, storageKey, body, body.length, {
+          'Content-Type': contentType,
+          'x-amz-meta-source-url': item.sourceUrl,
+          'x-amz-meta-document-type': item.documentType ?? 'other',
+          // S3 metadata headers must remain ASCII; preserve the original label URL-encoded.
+          'x-amz-meta-label': encodeURIComponent(item.label ?? 'Documento'),
+        })).etag;
+        void this.record('put', 'document', item.site, true, { bytesIn: body.length });
+      } catch (error) {
+        void this.record('put', 'document', item.site, false);
+        throw error;
+      }
     }
     await this.repository.markDocumentDownloaded(item.id, {
       storageKey, contentHash, contentType, sizeBytes: body.length, ...(etag ? { etag } : {}),
@@ -231,16 +260,18 @@ export class MediaStorageService {
   }
 
   private async optimizeStored(item: OptimizableMedia): Promise<{ original: number; optimized: number }> {
-    const original = await streamToBuffer(await this.client.getObject(this.options.bucket, item.storageKey));
+    const original = await this.readStoredObject(item.storageKey, 'image', item.site);
     if (original.length === 0) throw new Error('Empty stored image');
     const optimized = await this.imageOptimizer.optimize(original);
-    const stored = await this.storeOptimized(optimized, item.sourceUrl);
+    const stored = await this.storeOptimized(optimized, item.sourceUrl, item.site);
     await this.repository.markMediaOptimized(item.id, stored);
 
     if (item.storageKey !== stored.storageKey && await this.repository.countMediaByStorageKey(item.storageKey) === 0) {
       try {
         await this.client.removeObject(this.options.bucket, item.storageKey);
+        void this.record('delete', 'image', item.site, true);
       } catch (error) {
+        void this.record('delete', 'image', item.site, false);
         this.logger.warn('Obsolete source object could not be removed', {
           storageKey: item.storageKey,
           error: error instanceof Error ? error.message : String(error),
@@ -250,25 +281,34 @@ export class MediaStorageService {
     return { original: original.length, optimized: optimized.buffer.length };
   }
 
-  private async storeOptimized(image: OptimizedImage, sourceUrl: string): Promise<OptimizedMediaMetadata> {
+  private async storeOptimized(image: OptimizedImage, sourceUrl: string, site: string): Promise<OptimizedMediaMetadata> {
     const contentHash = createHash('sha256').update(image.buffer).digest('hex');
     const storageKey = `sha256/${contentHash.slice(0, 2)}/${contentHash}.webp`;
     let etag: string | undefined;
     try {
       etag = (await this.client.statObject(this.options.bucket, storageKey)).etag;
-    } catch {
-      const stored = await this.client.putObject(
-        this.options.bucket,
-        storageKey,
-        image.buffer,
-        image.buffer.length,
-        {
-          'Content-Type': image.contentType,
-          'x-amz-meta-source-url': sourceUrl,
-          'x-amz-meta-optimization-profile': image.profile,
-        },
-      );
-      etag = stored.etag;
+      void this.record('head', 'image', site, true);
+    } catch (error) {
+      void this.record('head', 'image', site, false);
+      if (!isNotFound(error)) throw error;
+      try {
+        const stored = await this.client.putObject(
+          this.options.bucket,
+          storageKey,
+          image.buffer,
+          image.buffer.length,
+          {
+            'Content-Type': image.contentType,
+            'x-amz-meta-source-url': sourceUrl,
+            'x-amz-meta-optimization-profile': image.profile,
+          },
+        );
+        etag = stored.etag;
+        void this.record('put', 'image', site, true, { bytesIn: image.buffer.length });
+      } catch (error) {
+        void this.record('put', 'image', site, false);
+        throw error;
+      }
     }
     return {
       storageKey,
@@ -282,10 +322,45 @@ export class MediaStorageService {
       ...(etag ? { etag } : {}),
     };
   }
+
+  private async readStoredObject(storageKey: string, mediaType: string, site: string): Promise<Buffer> {
+    try {
+      const body = await streamToBuffer(await this.client.getObject(this.options.bucket, storageKey));
+      void this.record('get', mediaType, site, true, { bytesOut: body.length });
+      return body;
+    } catch (error) {
+      void this.record('get', mediaType, site, false);
+      throw error;
+    }
+  }
+
+  private async record(
+    operation: string,
+    mediaType: string,
+    site: string,
+    success: boolean,
+    bytes: { bytesIn?: number; bytesOut?: number } = {},
+  ): Promise<void> {
+    try {
+      await this.repository.recordStorageOperation({
+        provider: 'oracle-minio', operation, mediaType, site, success, ...bytes,
+      });
+    } catch (error) {
+      this.logger.warn('Storage metric could not be recorded', {
+        operation, mediaType, site, error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
 }
 
 function normalizeContentType(value: string | null): string {
   return (value ?? 'application/octet-stream').split(';')[0]?.trim().toLowerCase() ?? 'application/octet-stream';
+}
+
+function isNotFound(error: unknown): boolean {
+  if (!error || typeof error !== 'object') return false;
+  const candidate = error as { code?: string; statusCode?: number };
+  return candidate.statusCode === 404 || ['NotFound', 'NoSuchKey', 'NoSuchObject'].includes(candidate.code ?? '');
 }
 
 async function streamToBuffer(stream: Readable): Promise<Buffer> {

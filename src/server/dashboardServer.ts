@@ -49,7 +49,11 @@ export class DashboardServer {
         })));
       }
       if (url.pathname === '/api/storage/stats' && request.method === 'GET') {
-        return json(response, 200, await this.repository.storageStats());
+        return json(response, 200, await this.repository.storageStats(optionalParam(url, 'site')));
+      }
+      if (url.pathname === '/api/storage/usage' && request.method === 'GET') {
+        const days = Math.min(365, positiveInt(url.searchParams.get('days'), 30));
+        return json(response, 200, await this.repository.storageUsage(days, optionalParam(url, 'site')));
       }
       if (url.pathname === '/api/operations/queues' && request.method === 'GET') {
         return json(response, 200, await this.repository.operationQueues(optionalParam(url, 'site')));
@@ -60,6 +64,36 @@ export class DashboardServer {
         const site = optionalParam(url, 'site');
         return json(response, 200, await this.repository.operationItems(queue, status, site,
           Math.min(500, positiveInt(url.searchParams.get('limit'), 100))));
+      }
+      if (url.pathname === '/api/operations/problems' && request.method === 'GET') {
+        const requestedQueues = parameterValues(url, 'queue');
+        const requestedStatuses = parameterValues(url, 'status');
+        const allowedQueues = ['revalidation', 'images', 'documents'] as const;
+        const allowedStatuses = ['pending', 'failed', 'exhausted'] as const;
+        const queues = requestedQueues.length ? requestedQueues.filter(
+          (value): value is typeof allowedQueues[number] => allowedQueues.includes(value as typeof allowedQueues[number]),
+        ) : [...allowedQueues];
+        const statuses = requestedStatuses.length ? requestedStatuses.filter(
+          (value): value is typeof allowedStatuses[number] => allowedStatuses.includes(value as typeof allowedStatuses[number]),
+        ) : [...allowedStatuses];
+        if ((requestedQueues.length > 0 && queues.length !== requestedQueues.length)
+          || (requestedStatuses.length > 0 && statuses.length !== requestedStatuses.length)) {
+          return json(response, 400, {
+            error: 'Filtro inválido.',
+            allowedQueues,
+            allowedStatuses,
+          });
+        }
+        const site = optionalParam(url, 'site');
+        response.setHeader('Cache-Control', 'no-store');
+        return json(response, 200, await this.repository.operationProblems({
+          queues,
+          statuses,
+          ...(site ? { site } : {}),
+          minAgeMinutes: Math.min(525_600, nonNegativeInt(url.searchParams.get('minAgeMinutes'), 0)),
+          limit: Math.min(500, positiveInt(url.searchParams.get('limit'), 100)),
+          offset: nonNegativeInt(url.searchParams.get('offset'), 0),
+        }));
       }
       const retryMatch = url.pathname.match(/^\/api\/operations\/retry\/(revalidation|images|documents)\/(\d+)$/);
       if (retryMatch?.[1] && retryMatch[2] && request.method === 'POST') {
@@ -166,6 +200,11 @@ function json(response: ServerResponse, status: number, body: unknown): void {
 function positiveInt(value: string | null, fallback: number): number {
   const parsed = Number(value);
   return Number.isInteger(parsed) && parsed > 0 ? parsed : fallback;
+}
+
+function nonNegativeInt(value: string | null, fallback: number): number {
+  const parsed = Number(value);
+  return Number.isInteger(parsed) && parsed >= 0 ? parsed : fallback;
 }
 
 function filtersFromUrl(url: URL, page: number, pageSize: number) {

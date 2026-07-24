@@ -15,6 +15,7 @@ export interface PendingMedia {
   id: number;
   sourceUrl: string;
   downloadAttempts: number;
+  site: string;
 }
 
 export interface PendingDocument extends PendingMedia {
@@ -36,6 +37,7 @@ export interface OptimizableMedia {
   storageKey: string;
   sizeBytes?: number;
   optimizationAttempts: number;
+  site: string;
 }
 
 export interface OptimizedMediaMetadata {
@@ -56,6 +58,8 @@ export interface StoredMedia {
   sourceUrl: string;
   downloadStatus: string;
   contentType?: string;
+  mediaType: string;
+  site: string;
 }
 
 export interface SaveObservationResult {
@@ -271,15 +275,16 @@ export class HistoricalRepository {
 
   public async listPendingMedia(limit: number): Promise<PendingMedia[]> {
     const result = await this.pool.query<{
-      id: string; source_url: string; download_attempts: number;
+      id: string; source_url: string; download_attempts: number; site: string;
     }>(
-      `SELECT id,source_url,download_attempts FROM lot_media
-       WHERE type='image' AND download_status IN ('pending','failed') AND download_attempts<4
-       ORDER BY id LIMIT $1`,
+      `SELECT lm.id,lm.source_url,lm.download_attempts,ml.site FROM lot_media lm
+       JOIN market_lots ml ON ml.id=lm.market_lot_id
+       WHERE lm.type='image' AND lm.download_status IN ('pending','failed') AND lm.download_attempts<4
+       ORDER BY lm.id LIMIT $1`,
       [limit],
     );
     return result.rows.map((row) => ({
-      id: Number(row.id), sourceUrl: row.source_url, downloadAttempts: row.download_attempts,
+      id: Number(row.id), sourceUrl: row.source_url, downloadAttempts: row.download_attempts, site: row.site,
     }));
   }
 
@@ -302,12 +307,14 @@ export class HistoricalRepository {
 
   public async listUnoptimizedMedia(profile: string, limit: number): Promise<OptimizableMedia[]> {
     const result = await this.pool.query<{
-      id: string; source_url: string; storage_key: string; size_bytes: string | null; optimization_attempts: number;
+      id: string; source_url: string; storage_key: string; size_bytes: string | null;
+      optimization_attempts: number; site: string;
     }>(
-      `SELECT id,source_url,storage_key,size_bytes,optimization_attempts FROM lot_media
-       WHERE type='image' AND download_status='downloaded' AND storage_key IS NOT NULL
-         AND optimization_profile IS DISTINCT FROM $1 AND optimization_attempts<4
-       ORDER BY id LIMIT $2`,
+      `SELECT lm.id,lm.source_url,lm.storage_key,lm.size_bytes,lm.optimization_attempts,ml.site
+       FROM lot_media lm JOIN market_lots ml ON ml.id=lm.market_lot_id
+       WHERE lm.type='image' AND lm.download_status='downloaded' AND lm.storage_key IS NOT NULL
+         AND lm.optimization_profile IS DISTINCT FROM $1 AND lm.optimization_attempts<4
+       ORDER BY lm.id LIMIT $2`,
       [profile, limit],
     );
     return result.rows.map((row) => ({
@@ -315,7 +322,7 @@ export class HistoricalRepository {
       sourceUrl: row.source_url,
       storageKey: row.storage_key,
       ...(row.size_bytes ? { sizeBytes: Number(row.size_bytes) } : {}),
-      optimizationAttempts: row.optimization_attempts,
+      optimizationAttempts: row.optimization_attempts, site: row.site,
     }));
   }
 
@@ -355,16 +362,38 @@ export class HistoricalRepository {
 
   public async getMedia(id: number): Promise<StoredMedia | undefined> {
     const result = await this.pool.query<{
-      id: string; storage_key: string | null; source_url: string; download_status: string; content_type: string | null;
-    }>(`UPDATE lot_media SET last_accessed_at=NOW() WHERE id=$1
-        RETURNING id,storage_key,source_url,download_status,content_type`, [id]);
+      id: string; storage_key: string | null; source_url: string; download_status: string;
+      content_type: string | null; type: string; site: string;
+    }>(`WITH updated AS (
+          UPDATE lot_media SET last_accessed_at=NOW() WHERE id=$1
+          RETURNING id,market_lot_id,storage_key,source_url,download_status,content_type,type
+        )
+        SELECT updated.*,ml.site FROM updated JOIN market_lots ml ON ml.id=updated.market_lot_id`, [id]);
     const row = result.rows[0];
     if (!row) return undefined;
     return {
       id: Number(row.id), sourceUrl: row.source_url, downloadStatus: row.download_status,
       ...(row.storage_key ? { storageKey: row.storage_key } : {}),
       ...(row.content_type ? { contentType: row.content_type } : {}),
+      mediaType: row.type, site: row.site,
     };
+  }
+
+  public async recordStorageOperation(input: {
+    provider: string; operation: string; mediaType: string; site: string; success: boolean;
+    requestCount?: number; bytesIn?: number; bytesOut?: number;
+  }): Promise<void> {
+    await this.pool.query(
+      `INSERT INTO object_storage_metrics (
+         bucket_hour,storage_provider,operation,media_type,site,success,request_count,bytes_in,bytes_out
+       ) VALUES (date_trunc('hour',NOW()),$1,$2,$3,$4,$5,$6,$7,$8)
+       ON CONFLICT (bucket_hour,storage_provider,operation,media_type,site,success) DO UPDATE SET
+         request_count=object_storage_metrics.request_count+EXCLUDED.request_count,
+         bytes_in=object_storage_metrics.bytes_in+EXCLUDED.bytes_in,
+         bytes_out=object_storage_metrics.bytes_out+EXCLUDED.bytes_out`,
+      [input.provider, input.operation, input.mediaType, input.site, input.success,
+        input.requestCount ?? 1, input.bytesIn ?? 0, input.bytesOut ?? 0],
+    );
   }
 
   private async upsertEvent(client: PoolClient, event: AuctionEventData | undefined): Promise<number | undefined> {
@@ -413,15 +442,17 @@ export class HistoricalRepository {
 
   public async listPendingDocuments(limit: number): Promise<PendingDocument[]> {
     const result = await this.pool.query<{
-      id: string; source_url: string; download_attempts: number; label: string | null; document_type: string | null;
+      id: string; source_url: string; download_attempts: number; label: string | null;
+      document_type: string | null; site: string;
     }>(
-      `SELECT id,source_url,download_attempts,label,document_type FROM lot_media
-       WHERE type='document' AND download_status IN ('pending','failed','metadata_only') AND download_attempts<4
-       ORDER BY id LIMIT $1`,
+      `SELECT lm.id,lm.source_url,lm.download_attempts,lm.label,lm.document_type,ml.site
+       FROM lot_media lm JOIN market_lots ml ON ml.id=lm.market_lot_id
+       WHERE lm.type='document' AND lm.download_status IN ('pending','failed','metadata_only')
+         AND lm.download_attempts<4 ORDER BY lm.id LIMIT $1`,
       [limit],
     );
     return result.rows.map((row) => ({
-      id: Number(row.id), sourceUrl: row.source_url, downloadAttempts: row.download_attempts,
+      id: Number(row.id), sourceUrl: row.source_url, downloadAttempts: row.download_attempts, site: row.site,
       ...(row.label ? { label: row.label } : {}),
       ...(row.document_type ? { documentType: row.document_type } : {}),
     }));

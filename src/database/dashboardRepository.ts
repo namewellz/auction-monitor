@@ -39,6 +39,15 @@ export interface LotFacetOption {
   count: number;
 }
 
+export interface OperationProblemsFilters {
+  queues: Array<'revalidation' | 'images' | 'documents'>;
+  statuses: Array<'pending' | 'failed' | 'exhausted'>;
+  site?: string;
+  minAgeMinutes: number;
+  limit: number;
+  offset: number;
+}
+
 function businessStatusSql(lotAlias: string): string {
   return `CASE WHEN ${lotAlias}.site = 'vipleiloes'
     THEN COALESCE(${lotAlias}.display_status, ${lotAlias}.sale_status)
@@ -243,23 +252,64 @@ export class DashboardRepository {
     return result.rows;
   }
 
-  public async storageStats(): Promise<unknown> {
+  public async storageStats(site?: string): Promise<unknown> {
     const [objects, migrations] = await Promise.all([
       this.pool.query(`
-        SELECT type, storage_provider AS "storageProvider", storage_tier AS "storageTier",
-          COUNT(*)::int AS "objectCount", COALESCE(SUM(size_bytes),0)::bigint AS "sizeBytes",
-          MIN(first_seen_at) AS "oldestObject", MAX(last_accessed_at) AS "lastAccess"
-        FROM lot_media
-        WHERE download_status='downloaded'
-        GROUP BY type, storage_provider, storage_tier
+        SELECT lm.type, lm.storage_provider AS "storageProvider", lm.storage_tier AS "storageTier",
+          COUNT(*)::int AS "objectCount", COALESCE(SUM(lm.size_bytes),0)::bigint AS "sizeBytes",
+          MIN(lm.first_seen_at) AS "oldestObject", MAX(lm.last_accessed_at) AS "lastAccess"
+        FROM lot_media lm JOIN market_lots ml ON ml.id=lm.market_lot_id
+        WHERE lm.download_status='downloaded' AND ($1::text IS NULL OR ml.site=$1)
+        GROUP BY lm.type, lm.storage_provider, lm.storage_tier
         ORDER BY storage_tier, type
-      `),
+      `, [site ?? null]),
       this.pool.query(`
         SELECT status, COUNT(*)::int AS count
         FROM storage_migrations GROUP BY status ORDER BY status
       `),
     ]);
     return { objects: objects.rows, migrations: migrations.rows };
+  }
+
+  public async storageUsage(days = 30, site?: string): Promise<unknown> {
+    const params = [days, site ?? null];
+    const where = `bucket_hour>=NOW()-($1::int * INTERVAL '1 day') AND ($2::text IS NULL OR site=$2)`;
+    const [summary, daily, bySite, period] = await Promise.all([
+      this.pool.query(`
+        SELECT operation,media_type AS "mediaType",success,
+          SUM(request_count)::bigint AS "requestCount",
+          SUM(bytes_in)::bigint AS "bytesIn",SUM(bytes_out)::bigint AS "bytesOut"
+        FROM object_storage_metrics WHERE ${where}
+        GROUP BY operation,media_type,success ORDER BY operation,media_type,success DESC
+      `, params),
+      this.pool.query(`
+        SELECT bucket_hour::date AS day,
+          SUM(request_count) FILTER (WHERE operation='put')::bigint AS puts,
+          SUM(request_count) FILTER (WHERE operation='get')::bigint AS gets,
+          SUM(request_count) FILTER (WHERE operation='head')::bigint AS heads,
+          SUM(request_count) FILTER (WHERE NOT success AND operation<>'head')::bigint AS failures,
+          SUM(bytes_in)::bigint AS "bytesIn",SUM(bytes_out)::bigint AS "bytesOut"
+        FROM object_storage_metrics WHERE ${where}
+        GROUP BY bucket_hour::date ORDER BY day
+      `, params),
+      this.pool.query(`
+        SELECT site,SUM(request_count)::bigint AS "requestCount",
+          SUM(request_count) FILTER (WHERE operation='put')::bigint AS puts,
+          SUM(request_count) FILTER (WHERE operation IN ('get','head'))::bigint AS "tier2Requests",
+          SUM(bytes_in)::bigint AS "bytesIn",SUM(bytes_out)::bigint AS "bytesOut"
+        FROM object_storage_metrics WHERE ${where}
+        GROUP BY site ORDER BY SUM(request_count) DESC
+      `, params),
+      this.pool.query(`
+        SELECT MIN(bucket_hour) AS "observedSince",MAX(bucket_hour) AS "observedUntil",
+          COUNT(DISTINCT bucket_hour)::int AS "hoursWithActivity"
+        FROM object_storage_metrics WHERE ${where}
+      `, params),
+    ]);
+    return {
+      days, site: site ?? null, summary: summary.rows, daily: daily.rows, bySite: bySite.rows,
+      period: period.rows[0],
+    };
   }
 
   public async collectionRuns(site?: string, limit = 10): Promise<unknown[]> {
@@ -374,6 +424,154 @@ export class DashboardRepository {
       ORDER BY lm.first_seen_at LIMIT $5
     `, [queue, type, site ?? null, status ?? null, limit]);
     return result.rows;
+  }
+
+  public async operationProblems(filters: OperationProblemsFilters): Promise<Record<string, unknown>> {
+    const params = [
+      filters.queues,
+      filters.statuses,
+      filters.site ?? null,
+      filters.minAgeMinutes * 60,
+    ];
+    const queueCte = `
+      WITH problem_items AS (
+        SELECT ml.id::int AS id,'revalidation'::text AS queue,ml.site,ml.url,ml.title,
+          CASE
+            WHEN ml.consecutive_failures>=6 THEN 'exhausted'
+            WHEN ml.revalidation_error IS NOT NULL THEN 'failed'
+            ELSE 'pending'
+          END::text AS status,
+          ml.consecutive_failures::int AS attempts,
+          ml.next_check_at AS queued_at,
+          ml.revalidation_started_at AS started_at,
+          ml.revalidation_finished_at AS finished_at,
+          ml.revalidation_finished_at AS last_attempt_at,
+          ml.revalidation_error AS last_error,
+          CASE
+            WHEN ml.revalidation_error IS NOT NULL OR ml.consecutive_failures>=6
+              THEN COALESCE(ml.revalidation_finished_at,ml.next_check_at)
+            ELSE ml.next_check_at
+          END AS stalled_since,
+          GREATEST(0,EXTRACT(EPOCH FROM (NOW()-CASE
+            WHEN ml.revalidation_error IS NOT NULL OR ml.consecutive_failures>=6
+              THEN COALESCE(ml.revalidation_finished_at,ml.next_check_at)
+            ELSE ml.next_check_at
+          END)))::float AS age_seconds,
+          EXTRACT(EPOCH FROM (ml.revalidation_finished_at-ml.revalidation_started_at))::float AS cycle_seconds,
+          EXTRACT(EPOCH FROM (ml.revalidation_finished_at-ml.revalidation_due_at))::float AS lead_seconds
+        FROM market_lots ml
+        WHERE ml.finalized_at IS NULL
+          AND (ml.next_check_at<=NOW() OR ml.revalidation_error IS NOT NULL OR ml.consecutive_failures>=6)
+
+        UNION ALL
+
+        SELECT lm.id::int AS id,
+          CASE WHEN lm.type='document' THEN 'documents' ELSE 'images' END::text AS queue,
+          ml.site,ml.url,ml.title,
+          CASE
+            WHEN lm.download_attempts>=4 AND lm.download_status<>'downloaded' THEN 'exhausted'
+            WHEN lm.download_status='failed' THEN 'failed'
+            ELSE 'pending'
+          END::text AS status,
+          lm.download_attempts::int AS attempts,
+          lm.first_seen_at AS queued_at,
+          lm.processing_started_at AS started_at,
+          lm.processing_finished_at AS finished_at,
+          COALESCE(lm.last_attempt_at,lm.processing_finished_at) AS last_attempt_at,
+          lm.download_error AS last_error,
+          CASE
+            WHEN lm.download_status='failed' OR lm.download_attempts>=4
+              THEN COALESCE(lm.last_attempt_at,lm.processing_finished_at,lm.first_seen_at)
+            ELSE lm.first_seen_at
+          END AS stalled_since,
+          GREATEST(0,EXTRACT(EPOCH FROM (NOW()-CASE
+            WHEN lm.download_status='failed' OR lm.download_attempts>=4
+              THEN COALESCE(lm.last_attempt_at,lm.processing_finished_at,lm.first_seen_at)
+            ELSE lm.first_seen_at
+          END)))::float AS age_seconds,
+          EXTRACT(EPOCH FROM (lm.processing_finished_at-lm.processing_started_at))::float AS cycle_seconds,
+          EXTRACT(EPOCH FROM (lm.downloaded_at-lm.first_seen_at))::float AS lead_seconds
+        FROM lot_media lm
+        JOIN market_lots ml ON ml.id=lm.market_lot_id
+        WHERE lm.type IN ('image','document')
+          AND lm.download_status IN ('pending','failed','metadata_only')
+      ),
+      filtered AS (
+        SELECT * FROM problem_items
+        WHERE queue=ANY($1::text[])
+          AND status=ANY($2::text[])
+          AND ($3::text IS NULL OR site=$3)
+          AND age_seconds >= $4::int
+      )
+    `;
+    const [summary, items] = await Promise.all([
+      this.pool.query<{
+        total: number;
+        byStatus: unknown[];
+        byQueue: unknown[];
+        bySite: unknown[];
+        topErrors: unknown[];
+      }>(`${queueCte}
+        SELECT
+          (SELECT COUNT(*)::int FROM filtered) AS total,
+          (SELECT COALESCE(json_agg(row_to_json(grouped)),'[]'::json) FROM (
+            SELECT status,COUNT(*)::int AS count
+            FROM filtered GROUP BY status ORDER BY count DESC
+          ) grouped) AS "byStatus",
+          (SELECT COALESCE(json_agg(row_to_json(grouped)),'[]'::json) FROM (
+            SELECT queue,COUNT(*)::int AS count,MIN(stalled_since) AS "oldestAt"
+            FROM filtered GROUP BY queue ORDER BY count DESC
+          ) grouped) AS "byQueue",
+          (SELECT COALESCE(json_agg(row_to_json(grouped)),'[]'::json) FROM (
+            SELECT site,COUNT(*)::int AS count
+            FROM filtered GROUP BY site ORDER BY count DESC,site LIMIT 50
+          ) grouped) AS "bySite",
+          (SELECT COALESCE(json_agg(row_to_json(grouped)),'[]'::json) FROM (
+            SELECT regexp_replace(last_error,'https?://[^ ]+','<url>','g') AS error,
+              COUNT(*)::int AS count
+            FROM filtered WHERE NULLIF(BTRIM(last_error),'') IS NOT NULL
+            GROUP BY regexp_replace(last_error,'https?://[^ ]+','<url>','g')
+            ORDER BY count DESC,error LIMIT 20
+          ) grouped) AS "topErrors"
+      `, params),
+      this.pool.query(`${queueCte}
+        SELECT id,queue,site,url,title,status,attempts,
+          queued_at AS "queuedAt",started_at AS "startedAt",finished_at AS "finishedAt",
+          last_attempt_at AS "lastAttemptAt",stalled_since AS "stalledSince",
+          last_error AS "lastError",age_seconds AS "ageSeconds",
+          cycle_seconds AS "cycleSeconds",lead_seconds AS "leadSeconds"
+        FROM filtered
+        ORDER BY CASE status WHEN 'exhausted' THEN 0 WHEN 'failed' THEN 1 ELSE 2 END,
+          age_seconds DESC,id
+        LIMIT $5 OFFSET $6`, [...params, filters.limit, filters.offset]),
+    ]);
+    const totals = summary.rows[0] ?? {
+      total: 0, byStatus: [], byQueue: [], bySite: [], topErrors: [],
+    };
+    const totalCount = totals.total;
+    return {
+      generatedAt: new Date().toISOString(),
+      filters: {
+        queues: filters.queues,
+        statuses: filters.statuses,
+        site: filters.site ?? null,
+        minAgeMinutes: filters.minAgeMinutes,
+      },
+      pagination: {
+        limit: filters.limit,
+        offset: filters.offset,
+        total: totalCount,
+        returned: items.rows.length,
+        hasMore: filters.offset + items.rows.length < totalCount,
+      },
+      summary: {
+        byStatus: totals.byStatus,
+        byQueue: totals.byQueue,
+        bySite: totals.bySite,
+        topErrors: totals.topErrors,
+      },
+      items: items.rows,
+    };
   }
 
   public async retryOperation(queue: string, id: number): Promise<boolean> {

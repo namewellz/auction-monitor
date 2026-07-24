@@ -306,6 +306,19 @@ export async function runPostgresMigrations(pool: Pool): Promise<void> {
       finished_at TIMESTAMPTZ
     );
 
+    CREATE TABLE IF NOT EXISTS object_storage_metrics (
+      bucket_hour TIMESTAMPTZ NOT NULL,
+      storage_provider TEXT NOT NULL,
+      operation TEXT NOT NULL,
+      media_type TEXT NOT NULL,
+      site TEXT NOT NULL,
+      success BOOLEAN NOT NULL,
+      request_count BIGINT NOT NULL DEFAULT 0,
+      bytes_in BIGINT NOT NULL DEFAULT 0,
+      bytes_out BIGINT NOT NULL DEFAULT 0,
+      PRIMARY KEY (bucket_hour,storage_provider,operation,media_type,site,success)
+    );
+
     CREATE TABLE IF NOT EXISTS lot_bid_history (
       id BIGSERIAL PRIMARY KEY,
       market_lot_id BIGINT NOT NULL REFERENCES market_lots(id) ON DELETE CASCADE,
@@ -377,6 +390,7 @@ export async function runPostgresMigrations(pool: Pool): Promise<void> {
     CREATE INDEX IF NOT EXISTS idx_real_estate_type ON real_estate_details (property_type,occupancy_status,accepts_financing);
     CREATE INDEX IF NOT EXISTS idx_vehicle_details_condition ON vehicle_details (vehicle_condition,engine_condition);
     CREATE INDEX IF NOT EXISTS idx_storage_migrations_status ON storage_migrations (status,started_at);
+    CREATE INDEX IF NOT EXISTS idx_object_storage_metrics_hour ON object_storage_metrics (bucket_hour DESC);
     CREATE INDEX IF NOT EXISTS idx_lot_media_optimization ON lot_media (optimization_profile, optimization_attempts, id)
       WHERE type='image' AND download_status='downloaded';
     CREATE INDEX IF NOT EXISTS idx_bid_history_lot_time ON lot_bid_history (market_lot_id, observed_at DESC);

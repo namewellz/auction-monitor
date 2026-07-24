@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Perfil de armazenamento · Auction Data</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <header class="site-header integrations-header">
+    <div class="header-main">
+      <a class="brand" href="/" aria-label="Auction Data"><span class="brand-symbol" aria-hidden="true"><i></i><b></b></span><span><strong>Auction</strong><small>data</small></span></a>
+      <div class="integrations-title"><span>Observabilidade</span><strong>Armazenamento</strong></div>
+      <div class="header-actions"><a class="header-link" href="/operations.html">Filas</a><a class="header-link" href="/integrations.html">Integrações</a><a class="header-link" href="/">Dashboard</a></div>
+    </div>
+  </header>
+  <main class="storage-page">
+    <header class="operations-intro">
+      <div><span class="eyebrow">Perfil real de uso</span><h1>Armazenamento e requisições</h1><p>Métricas prospectivas equivalentes ao S3, coletadas diretamente do fluxo do MinIO.</p></div>
+      <div class="storage-controls">
+        <label>Período<select id="storage-days"><option value="7">7 dias</option><option value="30" selected>30 dias</option><option value="90">90 dias</option><option value="365">365 dias</option></select></label>
+        <label>Origem<select id="storage-site"><option value="">Todos os sites</option></select></label>
+        <button id="storage-refresh" class="outline-button" type="button">Atualizar</button>
+      </div>
+    </header>
+    <div id="storage-notice" class="storage-notice">A medição começa nesta versão. O estoque anterior é conhecido, mas requisições passadas não são reconstruídas.</div>
+    <section id="storage-kpis" class="storage-kpis" aria-label="Indicadores de armazenamento"></section>
+    <section class="storage-panel">
+      <header><div><span class="eyebrow">AWS Pricing Calculator</span><h2>Entradas projetadas para 30 dias</h2></div><span id="storage-period"></span></header>
+      <div id="calculator-inputs" class="calculator-inputs"></div>
+    </section>
+    <section class="storage-grid">
+      <article class="storage-panel">
+        <header><div><span class="eyebrow">Histórico diário</span><h2>Operações e tráfego</h2></div></header>
+        <div class="operations-table-wrap"><table class="operations-table"><thead><tr><th>Dia</th><th>PUT</th><th>GET</th><th>HEAD</th><th>Falhas</th><th>Gravado</th><th>Servido</th></tr></thead><tbody id="storage-daily"></tbody></table></div>
+      </article>
+      <article class="storage-panel">
+        <header><div><span class="eyebrow">Distribuição</span><h2>Consumo por origem</h2></div></header>
+        <div class="operations-table-wrap"><table class="operations-table"><thead><tr><th>Origem</th><th>PUT</th><th>GET + HEAD</th><th>Gravado</th><th>Servido</th></tr></thead><tbody id="storage-sites"></tbody></table></div>
+      </article>
+    </section>
+  </main>
+  <script src="/storage.js" defer></script>
+</body>
+</html>

@@ -355,11 +355,20 @@ export class DashboardRepository {
     const [revalidation, images, documents, sites] = await Promise.all([
       this.pool.query(`
         SELECT 'revalidation' AS queue,
-          COUNT(*) FILTER (WHERE finalized_at IS NULL AND next_check_at<=NOW())::int AS pending,
-          COUNT(*) FILTER (WHERE revalidation_started_at IS NOT NULL AND revalidation_finished_at IS NULL)::int AS processing,
-          COUNT(*) FILTER (WHERE revalidation_error IS NOT NULL AND consecutive_failures<6)::int AS failed,
-          COUNT(*) FILTER (WHERE consecutive_failures>=6)::int AS exhausted,
-          MIN(next_check_at) FILTER (WHERE finalized_at IS NULL AND next_check_at<=NOW()) AS "oldestAt",
+          COUNT(*) FILTER (WHERE finalized_at IS NULL AND next_check_at<=NOW()
+            AND NOT (revalidation_started_at IS NOT NULL AND revalidation_finished_at IS NULL)
+            AND revalidation_error IS NULL AND consecutive_failures<6)::int AS pending,
+          COUNT(*) FILTER (WHERE finalized_at IS NULL
+            AND revalidation_started_at IS NOT NULL AND revalidation_finished_at IS NULL)::int AS processing,
+          COUNT(*) FILTER (WHERE finalized_at IS NULL
+            AND NOT (revalidation_started_at IS NOT NULL AND revalidation_finished_at IS NULL)
+            AND revalidation_error IS NOT NULL AND consecutive_failures<6)::int AS failed,
+          COUNT(*) FILTER (WHERE finalized_at IS NULL
+            AND NOT (revalidation_started_at IS NOT NULL AND revalidation_finished_at IS NULL)
+            AND consecutive_failures>=6)::int AS exhausted,
+          MIN(next_check_at) FILTER (WHERE finalized_at IS NULL AND next_check_at<=NOW()
+            AND NOT (revalidation_started_at IS NOT NULL AND revalidation_finished_at IS NULL)
+            AND revalidation_error IS NULL AND consecutive_failures<6) AS "oldestAt",
           COUNT(*) FILTER (WHERE revalidation_finished_at>=NOW()-INTERVAL '1 hour')::int AS "throughput1h",
           COUNT(*) FILTER (WHERE revalidation_finished_at>=NOW()-INTERVAL '24 hours')::int AS "throughput24h",
           percentile_cont(0.5) WITHIN GROUP (ORDER BY EXTRACT(EPOCH FROM (revalidation_finished_at-revalidation_started_at)))
@@ -392,7 +401,8 @@ export class DashboardRepository {
           EXTRACT(EPOCH FROM (revalidation_finished_at-revalidation_started_at))::float AS "cycleSeconds",
           EXTRACT(EPOCH FROM (revalidation_finished_at-revalidation_due_at))::float AS "leadSeconds"
         FROM market_lots
-        WHERE ($1::text IS NULL OR site=$1) AND ($2::text IS NULL OR $2=CASE
+        WHERE finalized_at IS NULL
+          AND ($1::text IS NULL OR site=$1) AND ($2::text IS NULL OR $2=CASE
           WHEN revalidation_started_at IS NOT NULL AND revalidation_finished_at IS NULL THEN 'processing'
           WHEN consecutive_failures>=6 THEN 'exhausted' WHEN revalidation_error IS NOT NULL THEN 'failed'
           WHEN next_check_at<=NOW() THEN 'pending' ELSE 'scheduled' END)

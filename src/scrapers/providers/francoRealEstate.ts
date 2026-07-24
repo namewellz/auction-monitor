@@ -2,6 +2,7 @@ import * as cheerio from 'cheerio';
 import type { AuctionScraper } from '../base/auctionScraper.js';
 import type { LotData } from '../../types/lot.js';
 import { hostMatches } from '../../utils/url.js';
+import { TerminalLotUnavailableError } from '../../errors/terminalLotUnavailableError.js';
 
 const BASE_URL = 'https://www.francoleiloes.com.br';
 
@@ -41,11 +42,16 @@ export class FrancoRealEstateScraper implements AuctionScraper {
 
   public async scrape(url: string): Promise<LotData> {
     const page = await fetch(url, { headers: headers(), signal: AbortSignal.timeout(30_000) });
+    if (page.status === 404 || page.status === 410) {
+      throw new TerminalLotUnavailableError(`Franco lot page is no longer available (HTTP ${page.status})`);
+    }
     if (!page.ok) throw new Error(`Franco lot page failed: HTTP ${page.status}`);
     const html = new TextDecoder('windows-1252').decode(await page.arrayBuffer());
     const $ = cheerio.load(html);
     const lotId = Number($('#ID_Leiloes_Lote').val());
-    if (!Number.isInteger(lotId) || lotId <= 0) throw new Error('Franco lot id was not found');
+    if (!Number.isInteger(lotId) || lotId <= 0) {
+      throw new TerminalLotUnavailableError('Franco lot page no longer contains an active lot');
+    }
 
     const token = $('input[name="__RequestVerificationToken"]').val()?.toString();
     if (!token) throw new Error('Franco request verification token was not found');

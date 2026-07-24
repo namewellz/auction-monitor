@@ -28,16 +28,27 @@ export class VipLeiloesClient {
   ): Promise<Response> {
     const url = new URL(pathOrUrl, this.origin);
     await this.ensureCookie(`${url.pathname}${url.search}`);
+    let lastRequestError: unknown;
 
     for (let attempt = 0; attempt < 5; attempt += 1) {
       await this.throttle();
-      const response = await fetch(url, {
-        method: options.method,
-        redirect: 'manual',
-        headers: this.headers(options.referer, options.ajax ?? false, options.body !== undefined),
-        ...(options.body ? { body: options.body } : {}),
-        signal: AbortSignal.timeout(30_000),
-      });
+      let response: Response;
+      try {
+        response = await fetch(url, {
+          method: options.method,
+          redirect: 'manual',
+          headers: this.headers(options.referer, options.ajax ?? false, options.body !== undefined),
+          ...(options.body ? { body: options.body } : {}),
+          signal: AbortSignal.timeout(15_000),
+        });
+      } catch (error) {
+        lastRequestError = error;
+        if (attempt >= 2) throw error;
+        this.cookie = undefined;
+        await delay(1_000 * (attempt + 1));
+        await this.ensureCookie(`${url.pathname}${url.search}`);
+        continue;
+      }
 
       if (response.status === 429) {
         const retryAfter = Number(response.headers.get('retry-after'));
@@ -54,7 +65,8 @@ export class VipLeiloesClient {
       return response;
     }
 
-    throw new Error(`VIP Leiloes request exhausted retries: ${url}`);
+    const suffix = lastRequestError instanceof Error ? `: ${lastRequestError.message}` : '';
+    throw new Error(`VIP Leiloes request exhausted retries: ${url}${suffix}`);
   }
 
   private async ensureCookie(returnUrl: string): Promise<void> {

@@ -121,8 +121,13 @@ export class MediaStorageService {
           result.bytes += await this.downloadDocument(item);
           result.downloaded += 1;
         } catch (error) {
-          result.failed += 1;
           const message = error instanceof Error ? error.message : String(error);
+          if (message === 'Empty image') {
+            await this.repository.markMediaUnavailable(item.id, message);
+            this.logger.info('Empty media source marked unavailable', { mediaId: item.id, url: item.sourceUrl });
+            continue;
+          }
+          result.failed += 1;
           await this.repository.markMediaFailed(item.id, message);
           this.logger.warn('Document download failed', { mediaId: item.id, url: item.sourceUrl, error: message });
         }

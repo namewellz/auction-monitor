@@ -233,6 +233,18 @@ export class HistoricalRepository {
     );
   }
 
+  public async markLotUnavailable(url: string, reason: string): Promise<void> {
+    await this.pool.query(
+      `UPDATE market_lots SET finalized_at=NOW(),next_check_at=NOW(),revalidation_finished_at=NOW(),
+       revalidation_error=NULL,consecutive_failures=0,sale_status='unavailable',
+       display_status='Anúncio indisponível na origem',
+       raw_data_json=COALESCE(raw_data_json,'{}'::jsonb)
+         || jsonb_build_object('unavailableReason',$1::text,'unavailableAt',NOW()::text)
+       WHERE url=$2`,
+      [reason.slice(0, 1000), url],
+    );
+  }
+
   public async addSource(site: string, url: string, scanIntervalMinutes = 360): Promise<void> {
     await this.pool.query(
       `INSERT INTO collection_sources (site,url,scan_interval_minutes,next_scan_at,created_at)
@@ -395,6 +407,14 @@ export class HistoricalRepository {
       ...(row.content_type ? { contentType: row.content_type } : {}),
       mediaType: row.type, site: row.site,
     };
+  }
+
+  public async markMediaUnavailable(id: number, error: string): Promise<void> {
+    await this.pool.query(
+      `UPDATE lot_media SET download_status='unavailable',download_attempts=download_attempts+1,
+       download_error=$1,processing_finished_at=NOW(),last_attempt_at=NOW() WHERE id=$2`,
+      [error.slice(0, 1000), id],
+    );
   }
 
   public async recordStorageOperation(input: {

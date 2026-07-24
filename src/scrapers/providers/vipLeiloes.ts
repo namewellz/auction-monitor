@@ -5,6 +5,7 @@ import { parseMoney } from '../../utils/format.js';
 import { hostMatches } from '../../utils/url.js';
 import { VipLeiloesClient } from './vipLeiloesClient.js';
 import { isVipFinalSale, normalizeVipStatus } from './vipLeiloesStatus.js';
+import { TerminalLotUnavailableError } from '../../errors/terminalLotUnavailableError.js';
 
 interface VipUpdateResponse {
   atualizacao: VipUpdate;
@@ -51,6 +52,11 @@ export class VipLeiloesScraper implements AuctionScraper {
 
   public async scrape(url: string): Promise<LotData> {
     const pageResponse = await this.client.get(url, 'https://www.vipleiloes.com.br/pesquisa');
+    const redirectLocation = pageResponse.headers.get('location') ?? '';
+    if (pageResponse.status >= 300 && pageResponse.status < 400
+      && /^\/?(?:$|pesquisa(?:[/?#]|$))/i.test(redirectLocation)) {
+      throw new TerminalLotUnavailableError('VIP announcement redirects to the catalog and is no longer available');
+    }
     if (!pageResponse.ok) throw new Error(`VIP lot page failed with status ${pageResponse.status}.`);
     const html = await pageResponse.text();
     if (/Attention Required!|cf-error-details/i.test(html)) throw new Error('VIP lot page was blocked by Cloudflare.');

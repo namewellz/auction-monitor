@@ -4,6 +4,7 @@ import type { CatalogDiscoveryService } from './catalogDiscoveryService.js';
 import type { Logger } from '../utils/logger.js';
 import { scheduleNextCheck } from './revalidationPolicy.js';
 import type { CollectionRunResult, CollectionSource } from '../types/historical.js';
+import { TerminalLotUnavailableError } from '../errors/terminalLotUnavailableError.js';
 
 export class HistoricalCollectorService {
   private readonly siteQueues = new Map<string, Promise<void>>();
@@ -99,6 +100,17 @@ export class HistoricalCollectorService {
             else unchanged += 1;
           });
         } catch (error) {
+          if (error instanceof TerminalLotUnavailableError) {
+            const message = error.message;
+            await this.repository.markLotUnavailable(item.url, message);
+            collected += 1;
+            updated += 1;
+            this.logger.info('Historical lot is no longer available at source', {
+              url: item.url,
+              reason: message,
+            });
+            continue;
+          }
           failed += 1;
           const message = error instanceof Error ? error.message : String(error);
           await this.repository.postponeFailedLot(item.url, item.recheckCount, message);

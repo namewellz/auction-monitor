@@ -335,8 +335,8 @@ export class DashboardRepository {
           COUNT(*) FILTER (WHERE lm.download_status IN ('pending','failed','metadata_only') AND lm.download_attempts<4)::int AS pending,
           COUNT(*) FILTER (WHERE lm.download_status='processing')::int AS processing,
           COUNT(*) FILTER (WHERE lm.download_status='failed' AND lm.download_attempts<4)::int AS failed,
-          COUNT(*) FILTER (WHERE lm.download_status<>'downloaded' AND lm.download_attempts>=4)::int AS exhausted,
-          MIN(lm.first_seen_at) FILTER (WHERE lm.download_status<>'downloaded') AS "oldestAt",
+          COUNT(*) FILTER (WHERE lm.download_status NOT IN ('downloaded','unavailable') AND lm.download_attempts>=4)::int AS exhausted,
+          MIN(lm.first_seen_at) FILTER (WHERE lm.download_status NOT IN ('downloaded','unavailable')) AS "oldestAt",
           COUNT(*) FILTER (WHERE lm.downloaded_at>=NOW()-INTERVAL '1 hour')::int AS "throughput1h",
           COUNT(*) FILTER (WHERE lm.downloaded_at>=NOW()-INTERVAL '24 hours')::int AS "throughput24h",
           percentile_cont(0.5) WITHIN GROUP (ORDER BY EXTRACT(EPOCH FROM (lm.processing_finished_at-lm.processing_started_at)))
@@ -416,7 +416,7 @@ export class DashboardRepository {
     const result = await this.pool.query(`
       SELECT lm.id::int,$1::text AS queue,ml.site,ml.url,ml.title,
         CASE WHEN lm.download_status='processing' THEN 'processing'
-          WHEN lm.download_attempts>=4 AND lm.download_status<>'downloaded' THEN 'exhausted'
+          WHEN lm.download_attempts>=4 AND lm.download_status NOT IN ('downloaded','unavailable') THEN 'exhausted'
           WHEN lm.download_status='failed' THEN 'failed'
           WHEN lm.download_status IN ('pending','metadata_only') THEN 'pending' ELSE lm.download_status END AS status,
         lm.download_attempts AS attempts,lm.first_seen_at AS "queuedAt",lm.processing_started_at AS "startedAt",
@@ -427,10 +427,10 @@ export class DashboardRepository {
       FROM lot_media lm JOIN market_lots ml ON ml.id=lm.market_lot_id
       WHERE lm.type=$2 AND ($3::text IS NULL OR ml.site=$3)
         AND ($4::text IS NULL OR $4=CASE WHEN lm.download_status='processing' THEN 'processing'
-          WHEN lm.download_attempts>=4 AND lm.download_status<>'downloaded' THEN 'exhausted'
+          WHEN lm.download_attempts>=4 AND lm.download_status NOT IN ('downloaded','unavailable') THEN 'exhausted'
           WHEN lm.download_status='failed' THEN 'failed'
           WHEN lm.download_status IN ('pending','metadata_only') THEN 'pending' ELSE lm.download_status END)
-        AND ($4::text IS NOT NULL OR lm.download_status<>'downloaded')
+        AND ($4::text IS NOT NULL OR lm.download_status NOT IN ('downloaded','unavailable'))
       ORDER BY lm.first_seen_at LIMIT $5
     `, [queue, type, site ?? null, status ?? null, limit]);
     return result.rows;
@@ -445,7 +445,7 @@ export class DashboardRepository {
     ];
     const queueCte = `
       WITH problem_items AS (
-        SELECT ml.id::int AS id,'revalidation'::text AS queue,ml.site,ml.url,ml.title,
+        SELECT ml.id::int AS id,'revalidation'::text AS queue,ml.site,ml.url,NULL::text AS source_url,ml.title,
           CASE
             WHEN ml.consecutive_failures>=6 THEN 'exhausted'
             WHEN ml.revalidation_error IS NOT NULL THEN 'failed'
@@ -477,9 +477,9 @@ export class DashboardRepository {
 
         SELECT lm.id::int AS id,
           CASE WHEN lm.type='document' THEN 'documents' ELSE 'images' END::text AS queue,
-          ml.site,ml.url,ml.title,
+          ml.site,ml.url,lm.source_url,ml.title,
           CASE
-            WHEN lm.download_attempts>=4 AND lm.download_status<>'downloaded' THEN 'exhausted'
+            WHEN lm.download_attempts>=4 AND lm.download_status NOT IN ('downloaded','unavailable') THEN 'exhausted'
             WHEN lm.download_status='failed' THEN 'failed'
             ELSE 'pending'
           END::text AS status,
@@ -545,7 +545,7 @@ export class DashboardRepository {
           ) grouped) AS "topErrors"
       `, params),
       this.pool.query(`${queueCte}
-        SELECT id,queue,site,url,title,status,attempts,
+        SELECT id,queue,site,url,source_url AS "sourceUrl",title,status,attempts,
           queued_at AS "queuedAt",started_at AS "startedAt",finished_at AS "finishedAt",
           last_attempt_at AS "lastAttemptAt",stalled_since AS "stalledSince",
           last_error AS "lastError",age_seconds AS "ageSeconds",

@@ -3,6 +3,7 @@ import type { AuctionScraper } from '../base/auctionScraper.js';
 import { fetchHtml } from '../base/cycleTlsClient.js';
 import type { LotData } from '../../types/lot.js';
 import { hostMatches } from '../../utils/url.js';
+import { TerminalLotUnavailableError } from '../../errors/terminalLotUnavailableError.js';
 
 interface SuperbidNextData {
   props?: {
@@ -66,6 +67,7 @@ export class SuperbidScraper implements AuctionScraper {
   }
 
   public async scrape(url: string): Promise<LotData> {
+    await assertOfferIsAvailable(url);
     const html = await fetchHtml(url, { allowNativeFallback: true, preferNative: true });
     const $ = cheerio.load(html);
     const offer = extractOffer($);
@@ -119,6 +121,20 @@ export class SuperbidScraper implements AuctionScraper {
       ...(offer.auction?.id !== undefined ? { eventExternalCode: String(offer.auction.id) } : {}),
       ...(offer.auction?.beginDate ? { auctionStart: parseSuperbidDate(offer.auction.beginDate) } : {}),
     };
+  }
+}
+
+async function assertOfferIsAvailable(url: string): Promise<void> {
+  const response = await fetch(url, {
+    method: 'GET',
+    redirect: 'manual',
+    headers: { 'User-Agent': 'Mozilla/5.0 (compatible; AuctionMonitor/1.0)' },
+    signal: AbortSignal.timeout(15_000),
+  });
+  const location = response.headers.get('location') ?? '';
+  await response.body?.cancel();
+  if (response.status === 404 || (response.status >= 300 && response.status < 400 && /(?:^|\/)404(?:[/?#]|$)/i.test(location))) {
+    throw new TerminalLotUnavailableError('Superbid offer was removed from the source catalog');
   }
 }
 

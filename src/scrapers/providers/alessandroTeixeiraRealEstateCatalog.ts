@@ -1,6 +1,7 @@
 import * as cheerio from 'cheerio';
 import type { CatalogPage, CatalogProvider } from '../base/catalogProvider.js';
 import type { LotData } from '../../types/lot.js';
+import { TerminalLotUnavailableError } from '../../errors/terminalLotUnavailableError.js';
 
 const DEFAULT_BASE_URL = 'https://alessandroteixeiraleiloes.com.br';
 const PAGE_SIZE = 40;
@@ -87,7 +88,7 @@ export class AlessandroTeixeiraRealEstateCatalogProvider implements CatalogProvi
       if (page >= payload.totalPages) break;
       page += 1;
     }
-    throw new Error(`VLance lot ${lotId} was not found in the catalog API`);
+    throw new TerminalLotUnavailableError(`VLance lot ${lotId} is no longer available in the catalog API`);
   }
 
   private async fetchLots(body: URLSearchParams): Promise<ApiResponse> {

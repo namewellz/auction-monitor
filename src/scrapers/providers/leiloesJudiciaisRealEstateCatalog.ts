@@ -29,3 +29,53 @@ export class DeoniziaRealEstateCatalogProvider extends AlessandroTeixeiraRealEst
     });
   }
 }
+
+export class JrRealEstateCatalogProvider extends AlessandroTeixeiraRealEstateCatalogProvider {
+  public constructor(requestIntervalMs = 750) {
+    super(requestIntervalMs, {
+      site: 'jrleiloes',
+      baseUrl: 'https://jrleiloes.com.br',
+      catalogType: '3',
+    });
+  }
+}
+
+export class GiordanoRealEstateCatalogProvider extends AlessandroTeixeiraRealEstateCatalogProvider {
+  public constructor(requestIntervalMs = 750) {
+    super(requestIntervalMs, {
+      site: 'giordanoleiloes',
+      baseUrl: 'https://www.giordanoleiloes.com.br',
+      catalogType: '3',
+    });
+  }
+}
+
+export class FranciscoFreitasRealEstateCatalogProvider extends AlessandroTeixeiraRealEstateCatalogProvider {
+  public constructor(requestIntervalMs = 750) {
+    super(requestIntervalMs, {
+      site: 'franciscofreitasleiloes',
+      baseUrl: 'https://franciscofreitasleiloes.com.br',
+      catalogType: '3',
+    });
+  }
+}
+
+export class RioRealEstateCatalogProvider extends AlessandroTeixeiraRealEstateCatalogProvider {
+  public constructor(requestIntervalMs = 750) {
+    super(requestIntervalMs, {
+      site: 'rioleiloes',
+      baseUrl: 'https://www.rioleiloes.com.br',
+      catalogType: '3',
+    });
+  }
+}
+
+export class HdRealEstateCatalogProvider extends AlessandroTeixeiraRealEstateCatalogProvider {
+  public constructor(requestIntervalMs = 750) {
+    super(requestIntervalMs, {
+      site: 'hdleiloes',
+      baseUrl: 'https://www.hdleiloes.com.br',
+      catalogType: '3',
+    });
+  }
+}

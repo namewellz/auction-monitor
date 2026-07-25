@@ -26,5 +26,10 @@ export function integrationDefinitions(leiloApiUrl: string): IntegrationDefiniti
     { site: 'akimotoleiloes', name: 'Akimoto Leilões', catalog: 'real_estate', publicUrl: 'https://www.akimotoleiloes.com.br/', collectionUrl: 'https://www.akimotoleiloes.com.br/core/api/get-lotes', scopes: ['Imóveis'] },
     { site: 'alessandraleiloes', name: 'Alessandra Leilões', catalog: 'real_estate', publicUrl: 'https://www.alessandraleiloes.com.br/', collectionUrl: 'https://www.alessandraleiloes.com.br/core/api/get-lotes', scopes: ['Imóveis'] },
     { site: 'deonizialeiloes', name: 'Deonizia Leilões', catalog: 'real_estate', publicUrl: 'https://www.deonizialeiloes.com.br/', collectionUrl: 'https://www.deonizialeiloes.com.br/core/api/get-lotes', scopes: ['Imóveis'] },
+    { site: 'jrleiloes', name: 'JR Leilões', catalog: 'real_estate', publicUrl: 'https://jrleiloes.com.br/', collectionUrl: 'https://jrleiloes.com.br/core/api/get-lotes', scopes: ['Imóveis'] },
+    { site: 'giordanoleiloes', name: 'Giordano Leilões', catalog: 'real_estate', publicUrl: 'https://www.giordanoleiloes.com.br/', collectionUrl: 'https://www.giordanoleiloes.com.br/core/api/get-lotes', scopes: ['Imóveis'] },
+    { site: 'franciscofreitasleiloes', name: 'Francisco Freitas Leilões', catalog: 'real_estate', publicUrl: 'https://franciscofreitasleiloes.com.br/', collectionUrl: 'https://franciscofreitasleiloes.com.br/core/api/get-lotes', scopes: ['Imóveis'] },
+    { site: 'rioleiloes', name: 'Rio Leilões', catalog: 'real_estate', publicUrl: 'https://www.rioleiloes.com.br/', collectionUrl: 'https://www.rioleiloes.com.br/core/api/get-lotes', scopes: ['Imóveis'] },
+    { site: 'hdleiloes', name: 'HD Leilões', catalog: 'real_estate', publicUrl: 'https://www.hdleiloes.com.br/', collectionUrl: 'https://www.hdleiloes.com.br/core/api/get-lotes', scopes: ['Imóveis'] },
   ];
 }

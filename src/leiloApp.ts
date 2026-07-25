@@ -27,6 +27,11 @@ import {
   AkimotoRealEstateCatalogProvider,
   AlessandraRealEstateCatalogProvider,
   DeoniziaRealEstateCatalogProvider,
+  FranciscoFreitasRealEstateCatalogProvider,
+  GiordanoRealEstateCatalogProvider,
+  HdRealEstateCatalogProvider,
+  JrRealEstateCatalogProvider,
+  RioRealEstateCatalogProvider,
 } from './scrapers/providers/leiloesJudiciaisRealEstateCatalog.js';
 import { integrationDefinitions } from './integrations.js';
 
@@ -73,6 +78,11 @@ const bulkCollector = new CatalogCollectionService(
     new AkimotoRealEstateCatalogProvider(config.vlanceRequestIntervalMs),
     new AlessandraRealEstateCatalogProvider(config.vlanceRequestIntervalMs),
     new DeoniziaRealEstateCatalogProvider(config.vlanceRequestIntervalMs),
+    new JrRealEstateCatalogProvider(config.vlanceRequestIntervalMs),
+    new GiordanoRealEstateCatalogProvider(config.vlanceRequestIntervalMs),
+    new FranciscoFreitasRealEstateCatalogProvider(config.vlanceRequestIntervalMs),
+    new RioRealEstateCatalogProvider(config.vlanceRequestIntervalMs),
+    new HdRealEstateCatalogProvider(config.vlanceRequestIntervalMs),
     new SuperbidCatalogProvider(config.superbidCatalogPageSize, config.superbidRequestIntervalMs,
       config.superbidCatalogMaxOffers),
   ],

@@ -9,8 +9,8 @@ parâmetros de rastreamento (`utm_*`).
 ## Resumo
 
 - Total da lista: **43 sites**
-- Integrados no código: **13**
-- Pendentes: **30**
+- Integrados no código: **18**
+- Pendentes: **25**
 - Integração existente fora da lista: **1** (Franco Leilões)
 
 ## Critério para considerar uma integração concluída
@@ -44,6 +44,11 @@ mais recentes estão validadas localmente e aguardam publicação.
 - [x] **Akimoto Leilões** — `akimotoleiloes.com.br` — 2 lotes validados localmente
 - [x] **Alessandra Leilões** — `alessandraleiloes.com.br` — 2 lotes válidos localmente
 - [x] **Deonizia Leilões** — `deonizialeiloes.com.br` — 67 lotes válidos localmente
+- [x] **JR Leilões** — `jrleiloes.com.br` — 186 lotes válidos localmente
+- [x] **Giordano Leilões** — `giordanoleiloes.com.br` — 125 lotes válidos localmente
+- [x] **Francisco Freitas Leilões** — `franciscofreitasleiloes.com.br` — identidade atual de Norte Nordeste Leilões; 102 lotes válidos localmente
+- [x] **Rio Leilões** — `rioleiloes.com.br` — 76 lotes válidos localmente
+- [x] **HD Leilões** — `hdleiloes.com.br` — 52 lotes válidos localmente
 
 ## Pendentes
 
@@ -54,22 +59,17 @@ mais recentes estão validadas localmente e aguardam publicação.
 - [ ] **Fidelis Leilões** — http://www.fidelisleiloes.com.br/
 - [ ] **Galvani Leilões** — https://www.galvanileiloes.com.br/
 - [ ] **Gilson Leilões** — https://gilsonleiloes.com.br/
-- [ ] **Giordano Leilões** — https://www.giordanoleiloes.com.br/
-- [ ] **HD Leilões** — https://www.hdleiloes.com.br/
 - [ ] **Insigne Leilões** — https://www.insigneleiloes.com.br/
 - [ ] **JD Leilões** — https://www.jdleiloes.com.br/
 - [ ] **José Rodovalho Leilões** — https://www.joserodovalholeiloes.com.br/
-- [ ] **JR Leilões** — https://jrleiloes.com.br/
 - [ ] **Leilões Centro-Oeste** — https://www.leiloescentrooeste.com.br/
 - [ ] **Leilões Judiciais Bahia** — https://www.leiloesjudiciaisbahia.com.br/externo/
 - [ ] **Leilões Zanoni** — https://www.leiloeszanoni.com.br/
 - [ ] **Maria Fixer Leilões** — https://www.mariafixerleiloes.com.br/
 - [ ] **Mato Grosso Leilões** — https://www.matogrossoleiloes.com.br/
 - [ ] **Milan Leilões** — https://www.milanleiloes.com.br/
-- [ ] **Norte Nordeste Leilões** — https://www.nortenordesteleiloes.com.br/
 - [ ] **Planalto Leilões** — https://www.planaltoleiloes.com.br/externo/
 - [ ] **Rigolon Leilões** — https://www.rigolonleiloes.com.br/externo
-- [ ] **Rio Leilões** — https://www.rioleiloes.com.br/
 - [ ] **Leiloeiro Público** — https://www.leiloeiropublico.com.br/
 - [ ] **Sato Leilões** — https://www.satoleiloes.com.br/
 - [ ] **Thaís Teixeira Leilões** — https://www.thaisteixeiraleiloes.com.br/externo/

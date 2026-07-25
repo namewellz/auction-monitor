@@ -25,14 +25,19 @@ export class AlessandroTeixeiraRealEstateCatalogProvider implements CatalogProvi
   public readonly source: string;
   private readonly baseUrl: string;
   private readonly apiUrl: string;
+  private readonly catalogType: string;
 
   public constructor(
     private readonly requestIntervalMs = 750,
-    options: { site: string; baseUrl: string } = { site: 'alessandroteixeira', baseUrl: DEFAULT_BASE_URL },
+    options: { site: string; baseUrl: string; catalogType?: string } = {
+      site: 'alessandroteixeira',
+      baseUrl: DEFAULT_BASE_URL,
+    },
   ) {
     this.site = options.site;
     this.baseUrl = options.baseUrl.replace(/\/$/, '');
     this.apiUrl = `${this.baseUrl}/core/api/get-lotes`;
+    this.catalogType = options.catalogType ?? 'imoveis';
     this.source = `${this.baseUrl}/leilao/index/imoveis`;
   }
 
@@ -45,7 +50,7 @@ export class AlessandroTeixeiraRealEstateCatalogProvider implements CatalogProvi
         'User-Agent': 'Mozilla/5.0 (compatible; AuctionMonitor/1.0)',
         Referer: this.source,
       },
-      body: new URLSearchParams({ pg: String(page), tipo: 'imoveis' }),
+      body: new URLSearchParams({ pg: String(page), tipo: this.catalogType }),
       signal: AbortSignal.timeout(30_000),
     });
     if (!response.ok) throw new Error(`Alessandro Teixeira API failed: HTTP ${response.status}`);
@@ -73,7 +78,7 @@ export class AlessandroTeixeiraRealEstateCatalogProvider implements CatalogProvi
     if (Number.isInteger(auctionId) && auctionId > 0) {
       const payload = await this.fetchLots(new URLSearchParams({
         pg: '1',
-        tipo: 'imoveis',
+        tipo: this.catalogType,
         leilao_id: String(auctionId),
       }));
       const lot = (payload.items ?? []).find((candidate) => candidate.lote_id === lotId);
@@ -82,7 +87,7 @@ export class AlessandroTeixeiraRealEstateCatalogProvider implements CatalogProvi
     let page = 1;
     while (page <= 100) {
       if (page > 1) await sleep(this.requestIntervalMs);
-      const payload = await this.fetchLots(new URLSearchParams({ pg: String(page), tipo: 'imoveis' }));
+      const payload = await this.fetchLots(new URLSearchParams({ pg: String(page), tipo: this.catalogType }));
       const lot = (payload.items ?? []).find((candidate) => candidate.lote_id === lotId);
       if (lot) return this.mapRealEstateLot(lot);
       if (page >= payload.totalPages) break;
@@ -118,10 +123,11 @@ function mapLot(lot: ApiLot, baseUrl: string): LotData {
   const description = plainText(lot.nm_descricao ?? '');
   const title = plainText(lot.nm_titulo_lote);
   const currentBid = money(lot.vl_lance);
-  const firstRoundMinimumValue = money(lot.vl_lanceinicial) || money(lot.vl_lanceminimo);
+  const firstRoundMinimumValue = money(lot.vl_lanceminimo) || money(lot.vl_lanceinicial);
   const secondRoundMinimumValue = money(lot.vl_lanceinicialsegundoleilao);
-  const initialBids = [firstRoundMinimumValue, secondRoundMinimumValue].filter((value) => value > 0);
-  const nextBid = currentBid > 0 ? currentBid : Math.min(...initialBids, money(lot.vl_lanceminimo));
+  const nextBid = currentBid > 0
+    ? currentBid
+    : money(lot.vl_lanceinicial) || secondRoundMinimumValue || firstRoundMinimumValue;
   const coordinates = coordinatesFromIframe(lot.iframe_streetview);
   const area = extractArea(`${title} ${description}`);
   const documents = (lot.anexos ?? []).filter((item) => item.nm_path_completo).map((item) => ({

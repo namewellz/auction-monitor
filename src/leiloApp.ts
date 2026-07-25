@@ -23,6 +23,11 @@ import { CapitalValorRealEstateCatalogProvider } from './scrapers/providers/capi
 import { D1LanceRealEstateCatalogProvider } from './scrapers/providers/d1LanceRealEstateCatalog.js';
 import { CarloFerrariRealEstateCatalogProvider, CidaFixerRealEstateCatalogProvider, DaSilvaRealEstateCatalogProvider, DoLeiloesRealEstateCatalogProvider } from './scrapers/providers/vlanceRealEstateCatalog.js';
 import { SuperbidCatalogProvider } from './scrapers/providers/superbidCatalog.js';
+import {
+  AkimotoRealEstateCatalogProvider,
+  AlessandraRealEstateCatalogProvider,
+  DeoniziaRealEstateCatalogProvider,
+} from './scrapers/providers/leiloesJudiciaisRealEstateCatalog.js';
 import { integrationDefinitions } from './integrations.js';
 
 const logger = new Logger(config.logLevel);
@@ -65,6 +70,9 @@ const bulkCollector = new CatalogCollectionService(
     new DaSilvaRealEstateCatalogProvider(config.vlanceRequestIntervalMs),
     new CidaFixerRealEstateCatalogProvider(config.vlanceRequestIntervalMs),
     new DoLeiloesRealEstateCatalogProvider(config.vlanceRequestIntervalMs),
+    new AkimotoRealEstateCatalogProvider(config.vlanceRequestIntervalMs),
+    new AlessandraRealEstateCatalogProvider(config.vlanceRequestIntervalMs),
+    new DeoniziaRealEstateCatalogProvider(config.vlanceRequestIntervalMs),
     new SuperbidCatalogProvider(config.superbidCatalogPageSize, config.superbidRequestIntervalMs,
       config.superbidCatalogMaxOffers),
   ],

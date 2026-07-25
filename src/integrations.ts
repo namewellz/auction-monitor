@@ -23,5 +23,8 @@ export function integrationDefinitions(leiloApiUrl: string): IntegrationDefiniti
     { site: 'dasilvaleiloes', name: 'Da Silva Leilões', catalog: 'real_estate', publicUrl: 'https://www.dasilvaleiloes.com.br/leilao/index/imoveis', collectionUrl: 'https://www.dasilvaleiloes.com.br/core/api/get-lotes', scopes: ['Imóveis'] },
     { site: 'cidafixerleiloes', name: 'Cida Fixer Leilões', catalog: 'real_estate', publicUrl: 'https://www.cidafixerleiloes.com.br/leilao/index/imoveis', collectionUrl: 'https://www.cidafixerleiloes.com.br/core/api/get-lotes', scopes: ['Imóveis'] },
     { site: 'doleiloes', name: 'Dó Leilões', catalog: 'real_estate', publicUrl: 'https://www.doleiloes.com.br/leilao/index/imoveis', collectionUrl: 'https://www.doleiloes.com.br/core/api/get-lotes', scopes: ['Imóveis'] },
+    { site: 'akimotoleiloes', name: 'Akimoto Leilões', catalog: 'real_estate', publicUrl: 'https://www.akimotoleiloes.com.br/', collectionUrl: 'https://www.akimotoleiloes.com.br/core/api/get-lotes', scopes: ['Imóveis'] },
+    { site: 'alessandraleiloes', name: 'Alessandra Leilões', catalog: 'real_estate', publicUrl: 'https://www.alessandraleiloes.com.br/', collectionUrl: 'https://www.alessandraleiloes.com.br/core/api/get-lotes', scopes: ['Imóveis'] },
+    { site: 'deonizialeiloes', name: 'Deonizia Leilões', catalog: 'real_estate', publicUrl: 'https://www.deonizialeiloes.com.br/', collectionUrl: 'https://www.deonizialeiloes.com.br/core/api/get-lotes', scopes: ['Imóveis'] },
   ];
 }

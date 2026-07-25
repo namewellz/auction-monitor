@@ -2,6 +2,9 @@
 
 Coletor historico de lotes de leilao com painel local e integracao opcional com Telegram.
 
+O acompanhamento das próximas origens de imóveis está no
+[backlog de integrações](docs/REAL_ESTATE_INTEGRATIONS_TODO.md).
+
 ## Uso local
 
 ```bash

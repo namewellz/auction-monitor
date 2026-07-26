@@ -117,18 +117,18 @@ export class MediaStorageService {
         const item = items[cursor++];
         if (!item) continue;
         try {
-          await this.repository.markMediaProcessing(item.id);
+          await this.repository.markDocumentProcessing(item.id);
           result.bytes += await this.downloadDocument(item);
           result.downloaded += 1;
         } catch (error) {
           const message = error instanceof Error ? error.message : String(error);
           if (message === 'Empty image') {
-            await this.repository.markMediaUnavailable(item.id, message);
+            await this.repository.markDocumentUnavailable(item.id, message);
             this.logger.info('Empty media source marked unavailable', { mediaId: item.id, url: item.sourceUrl });
             continue;
           }
           result.failed += 1;
-          await this.repository.markMediaFailed(item.id, message);
+          await this.repository.markDocumentFailed(item.id, message);
           this.logger.warn('Document download failed', { mediaId: item.id, url: item.sourceUrl, error: message });
         }
       }

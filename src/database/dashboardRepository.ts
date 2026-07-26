@@ -201,10 +201,21 @@ export class DashboardRepository {
         (SELECT COUNT(*)::int FROM lot_media lm JOIN filtered f ON f.id=lm.market_lot_id WHERE lm.type='image') AS "totalImages",
         (SELECT COUNT(*)::int FROM lot_media lm JOIN filtered f ON f.id=lm.market_lot_id WHERE lm.type='image' AND lm.download_status='downloaded') AS "downloadedImages",
         (SELECT COALESCE(SUM(lm.size_bytes), 0)::float FROM lot_media lm JOIN filtered f ON f.id=lm.market_lot_id WHERE lm.type='image' AND lm.download_status='downloaded') AS "imageBytes",
-        (SELECT COUNT(*)::int FROM lot_media lm JOIN filtered f ON f.id=lm.market_lot_id WHERE lm.type='document') AS "totalDocuments",
-        (SELECT COUNT(*)::int FROM lot_media lm JOIN filtered f ON f.id=lm.market_lot_id WHERE lm.type='document' AND lm.download_status='downloaded') AS "downloadedDocuments",
-        (SELECT COALESCE(SUM(lm.size_bytes), 0)::float FROM lot_media lm JOIN filtered f ON f.id=lm.market_lot_id WHERE lm.type='document' AND lm.download_status='downloaded') AS "documentBytes",
-        (SELECT COALESCE(SUM(lm.size_bytes), 0)::float FROM lot_media lm JOIN filtered f ON f.id=lm.market_lot_id WHERE lm.download_status='downloaded') AS "mediaBytes"
+        (SELECT COUNT(DISTINCT COALESCE(lm.content_hash,lm.source_url))::int
+          FROM lot_media lm JOIN filtered f ON f.id=lm.market_lot_id WHERE lm.type='document') AS "totalDocuments",
+        (SELECT COUNT(DISTINCT lm.storage_key)::int
+          FROM lot_media lm JOIN filtered f ON f.id=lm.market_lot_id
+          WHERE lm.type='document' AND lm.download_status='downloaded') AS "downloadedDocuments",
+        (SELECT COALESCE(SUM(stored.size_bytes),0)::float FROM (
+          SELECT DISTINCT ON (lm.storage_key) lm.storage_key,lm.size_bytes
+          FROM lot_media lm JOIN filtered f ON f.id=lm.market_lot_id
+          WHERE lm.type='document' AND lm.download_status='downloaded' AND lm.storage_key IS NOT NULL
+        ) stored) AS "documentBytes",
+        (SELECT COALESCE(SUM(stored.size_bytes),0)::float FROM (
+          SELECT DISTINCT ON (lm.storage_key) lm.storage_key,lm.size_bytes
+          FROM lot_media lm JOIN filtered f ON f.id=lm.market_lot_id
+          WHERE lm.download_status='downloaded' AND lm.storage_key IS NOT NULL
+        ) stored) AS "mediaBytes"
       FROM filtered
     `, query.params);
     return result.rows[0] ?? {};
@@ -255,12 +266,18 @@ export class DashboardRepository {
   public async storageStats(site?: string): Promise<unknown> {
     const [objects, migrations] = await Promise.all([
       this.pool.query(`
-        SELECT lm.type, lm.storage_provider AS "storageProvider", lm.storage_tier AS "storageTier",
-          COUNT(*)::int AS "objectCount", COALESCE(SUM(lm.size_bytes),0)::bigint AS "sizeBytes",
-          MIN(lm.first_seen_at) AS "oldestObject", MAX(lm.last_accessed_at) AS "lastAccess"
-        FROM lot_media lm JOIN market_lots ml ON ml.id=lm.market_lot_id
-        WHERE lm.download_status='downloaded' AND ($1::text IS NULL OR ml.site=$1)
-        GROUP BY lm.type, lm.storage_provider, lm.storage_tier
+        SELECT stored.type, stored.storage_provider AS "storageProvider", stored.storage_tier AS "storageTier",
+          COUNT(*)::int AS "objectCount", COALESCE(SUM(stored.size_bytes),0)::bigint AS "sizeBytes",
+          MIN(stored.first_seen_at) AS "oldestObject", MAX(stored.last_accessed_at) AS "lastAccess"
+        FROM (
+          SELECT DISTINCT ON (lm.storage_key) lm.type,lm.storage_provider,lm.storage_tier,
+            lm.size_bytes,lm.first_seen_at,lm.last_accessed_at,lm.storage_key
+          FROM lot_media lm JOIN market_lots ml ON ml.id=lm.market_lot_id
+          WHERE lm.download_status='downloaded' AND lm.storage_key IS NOT NULL
+            AND ($1::text IS NULL OR ml.site=$1)
+          ORDER BY lm.storage_key,lm.id
+        ) stored
+        GROUP BY stored.type, stored.storage_provider, stored.storage_tier
         ORDER BY storage_tier, type
       `, [site ?? null]),
       this.pool.query(`

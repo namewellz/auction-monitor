@@ -483,10 +483,18 @@ export class HistoricalRepository {
       id: string; source_url: string; download_attempts: number; label: string | null;
       document_type: string | null; site: string;
     }>(
-      `SELECT lm.id,lm.source_url,lm.download_attempts,lm.label,lm.document_type,ml.site
+      `SELECT DISTINCT ON (lm.source_url)
+         lm.id,lm.source_url,lm.download_attempts,lm.label,lm.document_type,ml.site
        FROM lot_media lm JOIN market_lots ml ON ml.id=lm.market_lot_id
        WHERE lm.type='document' AND lm.download_status IN ('pending','failed','metadata_only')
-         AND lm.download_attempts<4 ORDER BY lm.id LIMIT $1`,
+         AND lm.download_attempts<4
+         AND NOT EXISTS (
+           SELECT 1 FROM lot_media stored
+           WHERE stored.type='document' AND stored.source_url=lm.source_url
+             AND stored.download_status='downloaded' AND stored.storage_key IS NOT NULL
+         )
+       ORDER BY lm.source_url,lm.id
+       LIMIT $1`,
       [limit],
     );
     return result.rows.map((row) => ({
@@ -496,13 +504,48 @@ export class HistoricalRepository {
     }));
   }
 
+  public async markDocumentProcessing(id: number): Promise<void> {
+    await this.pool.query(
+      `UPDATE lot_media SET download_status='processing',processing_started_at=NOW(),processing_finished_at=NULL,
+       last_attempt_at=NOW()
+       WHERE type='document' AND source_url=(
+         SELECT source_url FROM lot_media WHERE id=$1 AND type='document'
+       ) AND download_status IN ('pending','failed','metadata_only')`,
+      [id],
+    );
+  }
+
+  public async markDocumentFailed(id: number, error: string): Promise<void> {
+    await this.pool.query(
+      `UPDATE lot_media SET download_status='failed',download_attempts=download_attempts+1,download_error=$1,
+       processing_finished_at=NOW()
+       WHERE type='document' AND source_url=(
+         SELECT source_url FROM lot_media WHERE id=$2 AND type='document'
+       ) AND download_status='processing'`,
+      [error.slice(0, 1000), id],
+    );
+  }
+
+  public async markDocumentUnavailable(id: number, error: string): Promise<void> {
+    await this.pool.query(
+      `UPDATE lot_media SET download_status='unavailable',download_attempts=download_attempts+1,
+       download_error=$1,processing_finished_at=NOW(),last_attempt_at=NOW()
+       WHERE type='document' AND source_url=(
+         SELECT source_url FROM lot_media WHERE id=$2 AND type='document'
+       ) AND download_status='processing'`,
+      [error.slice(0, 1000), id],
+    );
+  }
+
   public async markDocumentDownloaded(id: number, document: StoredDocumentMetadata, bucket: string): Promise<void> {
     await this.pool.query(
       `UPDATE lot_media SET storage_key=$1,content_hash=$2,content_type=$3,size_bytes=$4,etag=$5,
        original_size_bytes=$4,storage_provider='oracle-minio',storage_tier='hot',storage_bucket=$6,
        download_status='downloaded',download_attempts=download_attempts+1,download_error=NULL,downloaded_at=NOW(),
        processing_finished_at=NOW()
-       WHERE id=$7`,
+       WHERE type='document' AND source_url=(
+         SELECT source_url FROM lot_media WHERE id=$7 AND type='document'
+       )`,
       [document.storageKey, document.contentHash, document.contentType, document.sizeBytes,
         document.etag ?? null, bucket, id],
     );
@@ -596,6 +639,26 @@ export class HistoricalRepository {
          position=EXCLUDED.position,label=COALESCE(EXCLUDED.label,lot_media.label),
          document_type=COALESCE(EXCLUDED.document_type,lot_media.document_type),last_seen_at=EXCLUDED.last_seen_at`,
         [marketLotId, document.url, position, document.label ?? null, document.documentType ?? null, observedAt],
+      );
+      await client.query(
+        `UPDATE lot_media target SET
+           storage_key=stored.storage_key,content_hash=stored.content_hash,content_type=stored.content_type,
+           size_bytes=stored.size_bytes,original_size_bytes=stored.original_size_bytes,etag=stored.etag,
+           storage_provider=stored.storage_provider,storage_tier=stored.storage_tier,
+           storage_bucket=stored.storage_bucket,download_status='downloaded',
+           download_error=NULL,downloaded_at=stored.downloaded_at,processing_finished_at=NOW()
+         FROM (
+           SELECT storage_key,content_hash,content_type,size_bytes,original_size_bytes,etag,
+             storage_provider,storage_tier,storage_bucket,downloaded_at
+           FROM lot_media
+           WHERE type='document' AND source_url=$2 AND download_status='downloaded'
+             AND storage_key IS NOT NULL
+           ORDER BY downloaded_at DESC NULLS LAST,id
+           LIMIT 1
+         ) stored
+         WHERE target.market_lot_id=$1 AND target.type='document' AND target.source_url=$2
+           AND target.download_status<>'downloaded'`,
+        [marketLotId, document.url],
       );
     }
   }

@@ -112,12 +112,23 @@ const historicalScheduler = new HistoricalCollectorScheduler(
   config.collectorBatchSize,
   config.collectorIdlePollMs,
 );
+const dashboardRepository = new DashboardRepository(pool);
 const server = new DashboardServer(
-  new DashboardRepository(pool), bulkCollector, mediaStorage, logger, integrationDefinitions(config.leiloApiUrl),
+  dashboardRepository, bulkCollector, mediaStorage, logger, integrationDefinitions(config.leiloApiUrl),
 );
 
 server.listen(config.dashboardPort);
-cron.schedule(config.catalogCollectionCron, () => void bulkCollector.collectAll());
+void Promise.all([
+  dashboardRepository.facets({ assetTypes: ['car','motorcycle','heavy'],page: 1,pageSize: 1 }),
+  dashboardRepository.stats({ assetTypes: ['car','motorcycle','heavy'],page: 1,pageSize: 1 }),
+  dashboardRepository.facets({ assetTypes: ['real_estate'],page: 1,pageSize: 1 }),
+  dashboardRepository.stats({ assetTypes: ['real_estate'],page: 1,pageSize: 1 }),
+]).catch((error) => logger.warn('Dashboard cache warmup failed', {
+  error: error instanceof Error ? error.message : String(error),
+}));
+cron.schedule(config.catalogCollectionCron, () => {
+  void bulkCollector.collectAll().finally(() => dashboardRepository.invalidateCaches());
+});
 historicalScheduler.start();
 if (config.catalogCollectOnStart) void bulkCollector.collectAll('leilo');
 

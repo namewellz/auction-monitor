@@ -28,6 +28,11 @@ export class DashboardServer {
   private async handle(request: IncomingMessage, response: ServerResponse): Promise<void> {
     try {
       const url = new URL(request.url ?? '/', 'http://localhost');
+      const requestController = new AbortController();
+      request.once('aborted', () => requestController.abort());
+      response.once('close', () => {
+        if (!response.writableEnded) requestController.abort();
+      });
       if (url.pathname === '/api/stats' && request.method === 'GET') {
         return json(response, 200, await this.repository.stats(filtersFromUrl(url, 1, 1)));
       }
@@ -113,7 +118,10 @@ export class DashboardServer {
       if (url.pathname === '/api/lots' && request.method === 'GET') {
         const page = positiveInt(url.searchParams.get('page'), 1);
         const pageSize = Math.min(100, positiveInt(url.searchParams.get('pageSize'), 24));
-        return json(response, 200, await this.repository.lots(filtersFromUrl(url, page, pageSize)));
+        return json(response, 200, await this.repository.lots(
+          filtersFromUrl(url, page, pageSize),
+          requestController.signal,
+        ));
       }
       const mediaMatch = url.pathname.match(/^\/api\/media\/(\d+)$/);
       if (mediaMatch?.[1] && request.method === 'GET') {
@@ -152,11 +160,13 @@ export class DashboardServer {
         if (this.collector.getProgress().running) {
           return json(response, 409, { error: 'Já existe uma coleta em andamento.', progress: this.collector.getProgress() });
         }
-        void this.collector.collectAll(site);
+        void this.collector.collectAll(site).finally(() => this.repository.invalidateCaches());
         return json(response, 202, this.collector.getProgress());
       }
       if (url.pathname === '/api/collection' && request.method === 'POST') {
-        if (!this.collector.getProgress().running) void this.collector.collectAll();
+        if (!this.collector.getProgress().running) {
+          void this.collector.collectAll().finally(() => this.repository.invalidateCaches());
+        }
         return json(response, 202, this.collector.getProgress());
       }
 
@@ -213,6 +223,7 @@ function filtersFromUrl(url: URL, page: number, pageSize: number) {
   const eventDateTo = dateParameter(url.searchParams.get('eventDateTo'));
   const endingWindowDays = url.searchParams.get('endingWindowDays') === '3' ? 3 : undefined;
   const sort = sortParameter(url.searchParams.get('sort'));
+  const cursor = cursorParameter(url.searchParams.get('cursor'));
   return {
     page,
     pageSize,
@@ -239,7 +250,12 @@ function filtersFromUrl(url: URL, page: number, pageSize: number) {
     ...(eventDateTo ? { eventDateTo } : {}),
     ...(endingWindowDays ? { endingWindowDays } : {}),
     ...(sort ? { sort } : {}),
+    ...(cursor ? { cursor } : {}),
   };
+}
+
+function cursorParameter(value: string | null): string | undefined {
+  return value && value.length <= 256 && /^[A-Za-z0-9_-]+$/.test(value) ? value : undefined;
 }
 
 function sortParameter(value: string | null) {

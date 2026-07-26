@@ -137,6 +137,7 @@ export async function runPostgresMigrations(pool: Pool): Promise<void> {
     ALTER TABLE market_lots ADD COLUMN IF NOT EXISTS display_status TEXT;
     ALTER TABLE market_lots ADD COLUMN IF NOT EXISTS sale_phase TEXT;
     ALTER TABLE market_lots ADD COLUMN IF NOT EXISTS sale_result TEXT;
+    ALTER TABLE market_lots ADD COLUMN IF NOT EXISTS canonical_status TEXT;
     ALTER TABLE market_lots ADD COLUMN IF NOT EXISTS bid_count INTEGER;
     ALTER TABLE market_lots ADD COLUMN IF NOT EXISTS color TEXT;
     ALTER TABLE market_lots ADD COLUMN IF NOT EXISTS fuel TEXT;
@@ -227,6 +228,127 @@ export async function runPostgresMigrations(pool: Pool): Promise<void> {
     UPDATE lot_media SET download_status='failed',processing_finished_at=NOW(),
       download_error=COALESCE(download_error,'Processamento interrompido antes da conclusão.')
     WHERE download_status='processing';
+
+    CREATE TABLE IF NOT EXISTS lot_media_summary (
+      market_lot_id BIGINT PRIMARY KEY REFERENCES market_lots(id) ON DELETE CASCADE,
+      total_media INTEGER NOT NULL DEFAULT 0,
+      total_images INTEGER NOT NULL DEFAULT 0,
+      downloaded_images INTEGER NOT NULL DEFAULT 0,
+      image_bytes BIGINT NOT NULL DEFAULT 0,
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+
+    CREATE OR REPLACE FUNCTION refresh_lot_media_summary(target_lot_id BIGINT)
+    RETURNS VOID LANGUAGE plpgsql AS $function$
+    BEGIN
+      INSERT INTO lot_media_summary (
+        market_lot_id,total_media,total_images,downloaded_images,image_bytes,updated_at
+      )
+      SELECT target_lot_id,COUNT(*)::int,
+        COUNT(*) FILTER (WHERE type='image')::int,
+        COUNT(*) FILTER (WHERE type='image' AND download_status='downloaded')::int,
+        COALESCE(SUM(size_bytes) FILTER (
+          WHERE type='image' AND download_status='downloaded'
+        ),0)::bigint,NOW()
+      FROM lot_media WHERE market_lot_id=target_lot_id
+      ON CONFLICT (market_lot_id) DO UPDATE SET
+        total_media=EXCLUDED.total_media,total_images=EXCLUDED.total_images,
+        downloaded_images=EXCLUDED.downloaded_images,image_bytes=EXCLUDED.image_bytes,
+        updated_at=EXCLUDED.updated_at;
+    END
+    $function$;
+
+    CREATE OR REPLACE FUNCTION maintain_lot_media_summary()
+    RETURNS TRIGGER LANGUAGE plpgsql AS $function$
+    BEGIN
+      IF TG_OP='DELETE' OR (TG_OP='UPDATE' AND OLD.market_lot_id IS DISTINCT FROM NEW.market_lot_id) THEN
+        PERFORM refresh_lot_media_summary(OLD.market_lot_id);
+      END IF;
+      IF TG_OP<>'DELETE' THEN
+        PERFORM refresh_lot_media_summary(NEW.market_lot_id);
+      END IF;
+      RETURN COALESCE(NEW,OLD);
+    END
+    $function$;
+
+    DROP TRIGGER IF EXISTS trg_lot_media_summary_insert_delete ON lot_media;
+    CREATE TRIGGER trg_lot_media_summary_insert_delete AFTER INSERT OR DELETE ON lot_media
+    FOR EACH ROW EXECUTE FUNCTION maintain_lot_media_summary();
+    DROP TRIGGER IF EXISTS trg_lot_media_summary_update ON lot_media;
+    CREATE TRIGGER trg_lot_media_summary_update
+    AFTER UPDATE OF market_lot_id,type,download_status,size_bytes ON lot_media
+    FOR EACH ROW EXECUTE FUNCTION maintain_lot_media_summary();
+
+    INSERT INTO lot_media_summary (
+      market_lot_id,total_media,total_images,downloaded_images,image_bytes,updated_at
+    )
+    SELECT ml.id,COUNT(lm.id)::int,
+      COUNT(lm.id) FILTER (WHERE lm.type='image')::int,
+      COUNT(lm.id) FILTER (WHERE lm.type='image' AND lm.download_status='downloaded')::int,
+      COALESCE(SUM(lm.size_bytes) FILTER (
+        WHERE lm.type='image' AND lm.download_status='downloaded'
+      ),0)::bigint,NOW()
+    FROM market_lots ml LEFT JOIN lot_media lm ON lm.market_lot_id=ml.id
+    GROUP BY ml.id
+    ON CONFLICT (market_lot_id) DO UPDATE SET
+      total_media=EXCLUDED.total_media,total_images=EXCLUDED.total_images,
+      downloaded_images=EXCLUDED.downloaded_images,image_bytes=EXCLUDED.image_bytes,
+      updated_at=EXCLUDED.updated_at;
+
+    CREATE OR REPLACE FUNCTION calculate_canonical_lot_status(lot market_lots)
+    RETURNS TEXT LANGUAGE sql STABLE AS $function$
+      SELECT CASE
+        WHEN lot.sale_result='CONDITIONAL_REJECTED'
+          OR lot.sale_status IN ('CondicionalNegada','NegadaCondicional','CondicionalRecusada')
+          THEN 'conditional_rejected'
+        WHEN lot.sale_result='CONDITIONAL_PENDING' OR lot.sale_status='Condicional'
+          THEN 'conditional_pending'
+        WHEN lot.sale_result='SOLD'
+          OR lot.sale_status IN ('AgPagamento','Pago','Vendido','Arrematado','VendidoPorCompreJa')
+          THEN CASE WHEN EXISTS (
+            SELECT 1 FROM lot_snapshots history
+            WHERE history.market_lot_id=lot.id
+              AND (history.sale_status='Condicional'
+                OR history.raw_data_json::jsonb->>'saleResult'='CONDITIONAL_PENDING')
+          ) THEN 'conditional_approved' ELSE 'sold' END
+        WHEN lot.sale_result='UNSOLD' OR lot.sale_status IN ('NaoArrematado','SemLance') THEN 'unsold'
+        WHEN lot.sale_result='WITHDRAWN' OR lot.sale_status IN ('Retirado','Cancelado','Suspenso') THEN 'withdrawn'
+        WHEN lot.sale_phase='OPEN'
+          OR lot.sale_status IN ('LiberadoLeilao','AbertoParaOfertas','DoulheUma','DoulheDuas','EmDisputa')
+          THEN 'open'
+        ELSE 'other'
+      END
+    $function$;
+
+    CREATE OR REPLACE FUNCTION maintain_market_lot_canonical_status()
+    RETURNS TRIGGER LANGUAGE plpgsql AS $function$
+    BEGIN
+      NEW.canonical_status=calculate_canonical_lot_status(NEW);
+      RETURN NEW;
+    END
+    $function$;
+    DROP TRIGGER IF EXISTS trg_market_lot_canonical_status ON market_lots;
+    CREATE TRIGGER trg_market_lot_canonical_status
+    BEFORE INSERT OR UPDATE OF sale_result,sale_status,sale_phase ON market_lots
+    FOR EACH ROW EXECUTE FUNCTION maintain_market_lot_canonical_status();
+
+    CREATE OR REPLACE FUNCTION refresh_snapshot_lot_canonical_status()
+    RETURNS TRIGGER LANGUAGE plpgsql AS $function$
+    DECLARE target_lot_id BIGINT;
+    BEGIN
+      target_lot_id=COALESCE(NEW.market_lot_id,OLD.market_lot_id);
+      UPDATE market_lots lot SET canonical_status=calculate_canonical_lot_status(lot)
+      WHERE lot.id=target_lot_id;
+      RETURN COALESCE(NEW,OLD);
+    END
+    $function$;
+    DROP TRIGGER IF EXISTS trg_snapshot_canonical_status ON lot_snapshots;
+    CREATE TRIGGER trg_snapshot_canonical_status
+    AFTER INSERT OR UPDATE OF sale_status,raw_data_json OR DELETE ON lot_snapshots
+    FOR EACH ROW EXECUTE FUNCTION refresh_snapshot_lot_canonical_status();
+
+    UPDATE market_lots lot SET canonical_status=calculate_canonical_lot_status(lot)
+    WHERE canonical_status IS DISTINCT FROM calculate_canonical_lot_status(lot);
 
     CREATE TABLE IF NOT EXISTS real_estate_details (
       market_lot_id BIGINT PRIMARY KEY REFERENCES market_lots(id) ON DELETE CASCADE,
@@ -375,6 +497,7 @@ export async function runPostgresMigrations(pool: Pool): Promise<void> {
     CREATE INDEX IF NOT EXISTS idx_market_lots_event ON market_lots (event_id, lot_number);
     CREATE INDEX IF NOT EXISTS idx_market_lots_site ON market_lots (site);
     CREATE INDEX IF NOT EXISTS idx_market_lots_status ON market_lots (sale_phase, sale_result, sale_status);
+    CREATE INDEX IF NOT EXISTS idx_market_lots_canonical_status ON market_lots (canonical_status);
     CREATE INDEX IF NOT EXISTS idx_market_lots_location ON market_lots (state, city);
     CREATE INDEX IF NOT EXISTS idx_market_lots_origin ON market_lots (origin);
     CREATE INDEX IF NOT EXISTS idx_market_lots_consignor ON market_lots (consignor);
@@ -384,6 +507,7 @@ export async function runPostgresMigrations(pool: Pool): Promise<void> {
     CREATE INDEX IF NOT EXISTS idx_snapshots_lot_time ON lot_snapshots (market_lot_id, observed_at DESC);
     CREATE INDEX IF NOT EXISTS idx_change_log_lot_time ON lot_change_log (market_lot_id, observed_at DESC);
     CREATE INDEX IF NOT EXISTS idx_lot_media_pending ON lot_media (download_status, download_attempts, id);
+    CREATE INDEX IF NOT EXISTS idx_lot_media_lot ON lot_media (market_lot_id, type, position);
     CREATE INDEX IF NOT EXISTS idx_lot_media_hash ON lot_media (content_hash);
     CREATE INDEX IF NOT EXISTS idx_lot_media_storage_tier ON lot_media (storage_provider,storage_tier,last_accessed_at);
     CREATE INDEX IF NOT EXISTS idx_real_estate_location ON real_estate_details (state_code,city_code,neighborhood_normalized);

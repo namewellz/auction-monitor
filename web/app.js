@@ -36,6 +36,10 @@ const state = {
   facets: {},
   facetSearch: {},
   requestSequence: 0,
+  requestController: null,
+  cursor: null,
+  nextCursor: null,
+  pageCursors: new Map([[1, null]]),
   openFacets: new Set(facetConfig.filter((facet) => facet.open).map((facet) => facet.key)),
 };
 const viewerState = {
@@ -139,12 +143,12 @@ function bindEvents() {
   byId('sort-select').addEventListener('change', (event) => {
     state.sort = event.target.value;
     state.page = 1;
-    applyState();
+    applyState('lots');
   });
   byId('page-size-select').addEventListener('change', (event) => {
     state.pageSize = Number(event.target.value);
     state.page = 1;
-    applyState();
+    applyState('lots');
   });
   byId('collect-button').addEventListener('click', startCollection);
   byId('collection-history-toggle').addEventListener('click', toggleCollectionHistory);
@@ -215,29 +219,40 @@ function renderStats(data) {
   byId('last-updated').textContent = data.lastUpdatedAt ? `Atualizado ${relativeTime(data.lastUpdatedAt)}` : 'Aguardando primeira coleta';
 }
 
-async function refreshCatalog(updateUrl = true) {
+async function refreshCatalog(updateUrl = true, scope = 'all') {
   const sequence = ++state.requestSequence;
+  state.requestController?.abort();
+  const controller = new AbortController();
+  state.requestController = controller;
   if (updateUrl) syncUrl();
   reflectStateInControls();
   byId('lot-list').classList.add('loading');
   const filterParams = buildParams(false);
   const lotParams = buildParams(true);
   try {
-    const [facetData, lotData, statsData, historyData] = await Promise.all([
-      api(`/api/lots/facets?${filterParams}`),
-      api(`/api/lots?${lotParams}`),
-      api(`/api/stats?${filterParams}`),
-      api(`/api/collection/history?limit=10${state.filters.site.length === 1 ? `&site=${encodeURIComponent(state.filters.site[0])}` : ''}`),
-    ]);
+    const fullRefresh = scope === 'all';
+    const auxiliary = fullRefresh ? Promise.all([
+      api(`/api/lots/facets?${filterParams}`, { signal: controller.signal }),
+      api(`/api/stats?${filterParams}`, { signal: controller.signal }),
+      api(`/api/collection/history?limit=10${state.filters.site.length === 1 ? `&site=${encodeURIComponent(state.filters.site[0])}` : ''}`,
+        { signal: controller.signal }),
+    ]) : null;
+    const lotData = await api(`/api/lots?${lotParams}`, { signal: controller.signal });
+    if (sequence !== state.requestSequence) return;
+    state.total = lotData.total;
+    state.nextCursor = lotData.nextCursor || null;
+    renderActiveFilters();
+    renderLots(lotData);
+    byId('lot-list').classList.remove('loading');
+    if (!auxiliary) return;
+    const [facetData, statsData, historyData] = await auxiliary;
     if (sequence !== state.requestSequence) return;
     state.facets = facetData.facets;
-    state.total = lotData.total;
     renderStats(statsData);
     renderCollectionHistory(historyData);
     renderFacets();
-    renderActiveFilters();
-    renderLots(lotData);
   } catch (error) {
+    if (error.name === 'AbortError') return;
     if (sequence !== state.requestSequence) return;
     byId('lot-list').innerHTML = `<div class="request-error">Não foi possível carregar os bens. ${escapeHtml(error.message)}</div>`;
   } finally {
@@ -500,16 +515,27 @@ function clearFilters() {
   applyState();
 }
 
-function applyState() {
-  void refreshCatalog(true);
+function applyState(scope = 'all') {
+  state.cursor = null;
+  state.nextCursor = null;
+  state.pageCursors = new Map([[1, null]]);
+  void refreshCatalog(true, scope);
 }
 
 function changePage(page) {
   const totalPages = Math.max(1, Math.ceil(state.total / state.pageSize));
   if (page < 1 || page > totalPages) return;
+  if ((!state.sort || state.sort === 'auction_nearest') && page === state.page + 1 && state.nextCursor) {
+    state.pageCursors.set(page, state.nextCursor);
+    state.cursor = state.nextCursor;
+  } else if ((!state.sort || state.sort === 'auction_nearest') && page < state.page) {
+    state.cursor = state.pageCursors.get(page) || null;
+  } else {
+    state.cursor = null;
+  }
   state.page = page;
   syncUrl();
-  void refreshCatalog(false);
+  void refreshCatalog(false, 'lots');
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
@@ -541,6 +567,8 @@ function hydrateStateFromUrl() {
   state.pageSize = [24, 48, 72, 100].includes(Number(params.get('pageSize'))) ? Number(params.get('pageSize')) : 24;
   state.view = params.get('view') === 'list' ? 'list' : 'grid';
   state.sort = ['auction_nearest', 'auction_desc', 'auction_asc', 'year_desc', 'year_asc', 'brand_asc', 'brand_desc'].includes(params.get('sort')) ? params.get('sort') : 'auction_nearest';
+  state.cursor = params.get('cursor') || null;
+  state.pageCursors = new Map([[state.page, state.cursor]]);
   facetConfig.forEach((config) => {
     const values = [...new Set(params.getAll(config.param).flatMap((value) => value.split(',')).filter(Boolean))];
     state.filters[config.key] = config.key === 'assetType' && ['car', 'motorcycle', 'heavy'].every((value) => values.includes(value)) ? [] : values;
@@ -563,6 +591,7 @@ function buildParams(includePage) {
   if (includePage) {
     params.set('page', state.page);
     params.set('pageSize', state.pageSize);
+    if (state.cursor && state.sort === 'auction_nearest') params.set('cursor', state.cursor);
   }
   return params;
 }
@@ -878,6 +907,7 @@ async function startCollection() {
     await api(selectedSite ? `/api/collection/${selectedSite}` : '/api/collection', { method: 'POST' });
     await pollCollection();
   } catch (error) {
+    if (error.name === 'AbortError') return;
     button.disabled = false;
     button.textContent = 'Atualizar coleta';
     window.alert(error.message);

@@ -1,4 +1,4 @@
-import type { Pool } from 'pg';
+import type { Pool, QueryResult } from 'pg';
 
 export interface DashboardFilters {
   search?: string;
@@ -23,12 +23,20 @@ export interface DashboardFilters {
   eventDateFrom?: string;
   eventDateTo?: string;
   endingWindowDays?: number;
+  cursor?: string;
   sort?: LotSort;
   page: number;
   pageSize: number;
 }
 
 export type LotSort = 'auction_nearest' | 'auction_desc' | 'auction_asc' | 'year_desc' | 'year_asc' | 'brand_asc' | 'brand_desc';
+
+interface AuctionCursor {
+  bucket: number;
+  time: number;
+  lotNumber: number;
+  id: number;
+}
 
 export type LotFacetKey = 'site' | 'assetType' | 'event' | 'status' | 'brand' | 'model' | 'year' | 'state' |
   'city' | 'neighborhood' | 'propertyType' | 'vehicleCondition' | 'origin' | 'consignor' | 'classification' | 'fuel' | 'transmission' | 'runningAtEntry';
@@ -46,6 +54,81 @@ export interface OperationProblemsFilters {
   minAgeMinutes: number;
   limit: number;
   offset: number;
+}
+
+class DashboardQueryCache<T> {
+  private readonly values = new Map<string, { expiresAt: number; value: T }>();
+  private readonly pending = new Map<string, Promise<T>>();
+
+  public constructor(private readonly ttlMs = 30_000, private readonly maxEntries = 100) {}
+
+  public async get(key: string, loader: () => Promise<T>): Promise<T> {
+    const cached = this.values.get(key);
+    if (cached && cached.expiresAt > Date.now()) {
+      this.values.delete(key);
+      this.values.set(key, cached);
+      return cached.value;
+    }
+    if (cached) this.values.delete(key);
+    const existing = this.pending.get(key);
+    if (existing) return existing;
+    const pending = loader().then((value) => {
+      this.values.set(key, { expiresAt: Date.now() + this.ttlMs, value });
+      while (this.values.size > this.maxEntries) {
+        const oldest = this.values.keys().next().value as string | undefined;
+        if (oldest === undefined) break;
+        this.values.delete(oldest);
+      }
+      return value;
+    }).finally(() => this.pending.delete(key));
+    this.pending.set(key, pending);
+    return pending;
+  }
+
+  public clear(): void {
+    this.values.clear();
+  }
+}
+
+function dashboardCacheKey(filters: DashboardFilters): string {
+  const normalized = Object.fromEntries(Object.entries(filters)
+    .filter(([key, value]) => !['page', 'pageSize', 'sort', 'cursor'].includes(key) && value !== undefined)
+    .map(([key, value]) => [key, Array.isArray(value) ? [...value].sort() : value]));
+  return JSON.stringify(normalized);
+}
+
+async function cancellableQuery<T extends Record<string, unknown>>(
+  pool: Pool,
+  text: string,
+  params: unknown[],
+  signal?: AbortSignal,
+): Promise<QueryResult<T>> {
+  if (!signal) return pool.query<T>(text, params);
+  if (signal.aborted) throw new DOMException('Request aborted', 'AbortError');
+  const client = await pool.connect();
+  try {
+    return await new Promise<QueryResult<T>>((resolve, reject) => {
+      let query: unknown;
+      const onAbort = () => {
+        if (query) (client as unknown as { cancel: (target: unknown, query: unknown) => void }).cancel(client, query);
+      };
+      signal.addEventListener('abort', onAbort, { once: true });
+      query = (client as unknown as {
+        query: (
+          queryText: string,
+          values: unknown[],
+          callback: (error: Error | null, result: QueryResult<T>) => void,
+        ) => unknown;
+      }).query(text, params, (error, result) => {
+        signal.removeEventListener('abort', onAbort);
+        if (error) reject(signal.aborted ? new DOMException('Request aborted', 'AbortError') : error);
+        else resolve(result);
+      });
+      if (signal.aborted) onAbort();
+    });
+  } finally {
+    client.release();
+  }
 }
 
 function businessStatusSql(lotAlias: string): string {
@@ -69,29 +152,7 @@ function businessStatusSql(lotAlias: string): string {
 }
 
 function canonicalStatusSql(lotAlias: string): string {
-  return `CASE
-    WHEN ${lotAlias}.sale_result = 'CONDITIONAL_REJECTED'
-      OR ${lotAlias}.sale_status IN ('CondicionalNegada','NegadaCondicional','CondicionalRecusada')
-      THEN 'conditional_rejected'
-    WHEN ${lotAlias}.sale_result = 'CONDITIONAL_PENDING' OR ${lotAlias}.sale_status = 'Condicional'
-      THEN 'conditional_pending'
-    WHEN ${lotAlias}.sale_result = 'SOLD'
-      OR ${lotAlias}.sale_status IN ('AgPagamento','Pago','Vendido','Arrematado','VendidoPorCompreJa')
-      THEN CASE WHEN EXISTS (
-        SELECT 1 FROM lot_snapshots canonical_history
-        WHERE canonical_history.market_lot_id = ${lotAlias}.id
-          AND (canonical_history.sale_status = 'Condicional'
-            OR canonical_history.raw_data_json::jsonb->>'saleResult' = 'CONDITIONAL_PENDING')
-      ) THEN 'conditional_approved' ELSE 'sold' END
-    WHEN ${lotAlias}.sale_result = 'UNSOLD'
-      OR ${lotAlias}.sale_status IN ('NaoArrematado','SemLance') THEN 'unsold'
-    WHEN ${lotAlias}.sale_result = 'WITHDRAWN'
-      OR ${lotAlias}.sale_status IN ('Retirado','Cancelado','Suspenso') THEN 'withdrawn'
-    WHEN ${lotAlias}.sale_phase = 'OPEN'
-      OR ${lotAlias}.sale_status IN ('LiberadoLeilao','AbertoParaOfertas','DoulheUma','DoulheDuas','EmDisputa')
-      THEN 'open'
-    ELSE 'other'
-  END`;
+  return `${lotAlias}.canonical_status`;
 }
 
 function buildLotWhere(filters: DashboardFilters, omittedFacet?: LotFacetKey): { where: string; params: unknown[] } {
@@ -180,43 +241,94 @@ function lotOrderBy(sort: LotSort | undefined): string {
   }
 }
 
+function decodeAuctionCursor(value: string | undefined): AuctionCursor | undefined {
+  if (!value) return undefined;
+  try {
+    const parsed = JSON.parse(Buffer.from(value, 'base64url').toString('utf8')) as Partial<AuctionCursor>;
+    if (![parsed.bucket, parsed.time, parsed.lotNumber, parsed.id].every(Number.isFinite)) return undefined;
+    return parsed as AuctionCursor;
+  } catch {
+    return undefined;
+  }
+}
+
+function encodeAuctionCursor(row: Record<string, unknown>): string {
+  return Buffer.from(JSON.stringify({
+    bucket: Number(row._sortBucket),
+    time: Number(row._sortTime),
+    lotNumber: Number(row._sortLotNumber),
+    id: Number(row.id),
+  })).toString('base64url');
+}
+
 export class DashboardRepository {
+  private readonly statsCache = new DashboardQueryCache<Record<string, unknown>>();
+  private readonly facetsCache = new DashboardQueryCache<{
+    total: number; facets: Record<LotFacetKey, LotFacetOption[]>;
+  }>();
+
   public constructor(private readonly pool: Pool) {}
 
+  public invalidateCaches(): void {
+    this.statsCache.clear();
+    this.facetsCache.clear();
+  }
+
   public async stats(filters: DashboardFilters): Promise<Record<string, unknown>> {
+    return this.statsCache.get(dashboardCacheKey(filters), () => this.loadStats(filters));
+  }
+
+  private async loadStats(filters: DashboardFilters): Promise<Record<string, unknown>> {
     const query = buildLotWhere(filters);
     const result = await this.pool.query<Record<string, unknown>>(`
-      WITH filtered AS (
-        SELECT ml.* FROM market_lots ml WHERE ${query.where}
+      WITH filtered AS MATERIALIZED (
+        SELECT ml.id,ml.event_id,ml.auction_end,ml.final_bid,ml.current_bid,ml.last_seen_at
+        FROM market_lots ml WHERE ${query.where}
+      ), filtered_media AS MATERIALIZED (
+        SELECT lm.type,lm.download_status,lm.size_bytes,lm.content_hash,lm.source_url,lm.storage_key
+        FROM lot_media lm
+        JOIN filtered f ON f.id=lm.market_lot_id
+      ), lot_stats AS (
+        SELECT
+          COUNT(*)::int AS "totalLots",
+          COUNT(DISTINCT event_id)::int AS "totalEvents",
+          COUNT(*) FILTER (WHERE auction_end > NOW())::int AS "activeLots",
+          COUNT(*) FILTER (WHERE auction_end <= NOW())::int AS "endedLots",
+          COUNT(*) FILTER (WHERE final_bid IS NOT NULL)::int AS "lotsWithResult",
+          ROUND(AVG(current_bid) FILTER (WHERE current_bid > 0), 2)::float AS "averageBid",
+          MAX(last_seen_at) AS "lastUpdatedAt"
+        FROM filtered
+      ), media_stats AS (
+        SELECT
+          COALESCE(SUM(summary.total_media),0)::int AS "totalMedia",
+          COALESCE(SUM(summary.total_images),0)::int AS "totalImages",
+          COALESCE(SUM(summary.downloaded_images),0)::int AS "downloadedImages",
+          COALESCE(SUM(summary.image_bytes),0)::float AS "imageBytes"
+        FROM filtered
+        JOIN lot_media_summary summary ON summary.market_lot_id=filtered.id
+      ), document_stats AS (
+        SELECT
+          COUNT(DISTINCT COALESCE(content_hash,source_url)) FILTER (
+            WHERE type='document'
+          )::int AS "totalDocuments",
+          COUNT(DISTINCT storage_key) FILTER (
+            WHERE type='document' AND download_status='downloaded'
+          )::int AS "downloadedDocuments"
+        FROM filtered_media
+      ), stored_media AS (
+        SELECT storage_key,MAX(size_bytes)::float AS size_bytes,
+          BOOL_OR(type='document') AS is_document
+        FROM filtered_media
+        WHERE download_status='downloaded' AND storage_key IS NOT NULL
+        GROUP BY storage_key
+      ), storage_stats AS (
+        SELECT
+          COALESCE(SUM(size_bytes) FILTER (WHERE is_document),0)::float AS "documentBytes",
+          COALESCE(SUM(size_bytes),0)::float AS "mediaBytes"
+        FROM stored_media
       )
-      SELECT
-        COUNT(*)::int AS "totalLots",
-        COUNT(DISTINCT event_id)::int AS "totalEvents",
-        COUNT(*) FILTER (WHERE auction_end > NOW())::int AS "activeLots",
-        COUNT(*) FILTER (WHERE auction_end <= NOW())::int AS "endedLots",
-        COUNT(*) FILTER (WHERE final_bid IS NOT NULL)::int AS "lotsWithResult",
-        ROUND(AVG(current_bid) FILTER (WHERE current_bid > 0), 2)::float AS "averageBid",
-        MAX(last_seen_at) AS "lastUpdatedAt",
-        (SELECT COUNT(*)::int FROM lot_media lm JOIN filtered f ON f.id=lm.market_lot_id) AS "totalMedia",
-        (SELECT COUNT(*)::int FROM lot_media lm JOIN filtered f ON f.id=lm.market_lot_id WHERE lm.type='image') AS "totalImages",
-        (SELECT COUNT(*)::int FROM lot_media lm JOIN filtered f ON f.id=lm.market_lot_id WHERE lm.type='image' AND lm.download_status='downloaded') AS "downloadedImages",
-        (SELECT COALESCE(SUM(lm.size_bytes), 0)::float FROM lot_media lm JOIN filtered f ON f.id=lm.market_lot_id WHERE lm.type='image' AND lm.download_status='downloaded') AS "imageBytes",
-        (SELECT COUNT(DISTINCT COALESCE(lm.content_hash,lm.source_url))::int
-          FROM lot_media lm JOIN filtered f ON f.id=lm.market_lot_id WHERE lm.type='document') AS "totalDocuments",
-        (SELECT COUNT(DISTINCT lm.storage_key)::int
-          FROM lot_media lm JOIN filtered f ON f.id=lm.market_lot_id
-          WHERE lm.type='document' AND lm.download_status='downloaded') AS "downloadedDocuments",
-        (SELECT COALESCE(SUM(stored.size_bytes),0)::float FROM (
-          SELECT DISTINCT ON (lm.storage_key) lm.storage_key,lm.size_bytes
-          FROM lot_media lm JOIN filtered f ON f.id=lm.market_lot_id
-          WHERE lm.type='document' AND lm.download_status='downloaded' AND lm.storage_key IS NOT NULL
-        ) stored) AS "documentBytes",
-        (SELECT COALESCE(SUM(stored.size_bytes),0)::float FROM (
-          SELECT DISTINCT ON (lm.storage_key) lm.storage_key,lm.size_bytes
-          FROM lot_media lm JOIN filtered f ON f.id=lm.market_lot_id
-          WHERE lm.download_status='downloaded' AND lm.storage_key IS NOT NULL
-        ) stored) AS "mediaBytes"
-      FROM filtered
+      SELECT lot_stats.*,media_stats.*,document_stats.*,storage_stats.*
+      FROM lot_stats CROSS JOIN media_stats CROSS JOIN document_stats CROSS JOIN storage_stats
     `, query.params);
     return result.rows[0] ?? {};
   }
@@ -625,17 +737,39 @@ export class DashboardRepository {
     return result.rows;
   }
 
-  public async lots(filters: DashboardFilters): Promise<{ items: unknown[]; total: number; page: number; pageSize: number }> {
+  public async lots(filters: DashboardFilters, signal?: AbortSignal): Promise<{
+    items: unknown[]; total: number; page: number; pageSize: number; nextCursor?: string;
+  }> {
     const { where, params } = buildLotWhere(filters);
-    const totalResult = await this.pool.query<{ total: number }>(
+    const totalResult = await cancellableQuery<{ total: number }>(
+      this.pool,
       `SELECT COUNT(*)::int AS total FROM market_lots ml WHERE ${where}`,
       params,
+      signal,
     );
-    params.push(filters.pageSize);
+    const cursor = decodeAuctionCursor(filters.cursor);
+    const useKeyset = (!filters.sort || filters.sort === 'auction_nearest') && (filters.page === 1 || Boolean(cursor));
+    const sortBucket = `CASE WHEN ml.auction_end>=NOW() THEN 0 WHEN ml.auction_end<NOW() THEN 1 ELSE 2 END`;
+    const sortTime = `CASE
+      WHEN ml.auction_end>=NOW() THEN EXTRACT(EPOCH FROM ml.auction_end)
+      WHEN ml.auction_end<NOW() THEN -EXTRACT(EPOCH FROM ml.auction_end)
+      ELSE 9000000000000000000
+    END`;
+    const sortLotNumber = `COALESCE(NULLIF(regexp_replace(ml.lot_number,'\\D','','g'),'')::int,2147483647)`;
+    let cursorWhere = '';
+    if (useKeyset && cursor) {
+      params.push(cursor.bucket, cursor.time, cursor.lotNumber, cursor.id);
+      const first = params.length - 3;
+      cursorWhere = ` AND (${sortBucket},${sortTime},${sortLotNumber},ml.id)
+        > ($${first}::int,$${first + 1}::numeric,$${first + 2}::int,$${first + 3}::bigint)`;
+    }
+    params.push(filters.pageSize + (useKeyset ? 1 : 0));
     const limit = `$${params.length}`;
-    params.push((filters.page - 1) * filters.pageSize);
+    params.push(useKeyset ? 0 : (filters.page - 1) * filters.pageSize);
     const offset = `$${params.length}`;
-    const result = await this.pool.query(`
+    const result = await cancellableQuery(
+      this.pool,
+      `
       SELECT
         ml.id::int, ml.site, ml.asset_type AS "assetType", ml.classification, ml.external_code AS "externalCode", ml.url, ml.lot_number AS "lotNumber",
         ml.title, ml.brand, ml.model, ml.manufacture_year AS "manufactureYear",
@@ -663,60 +797,160 @@ export class DashboardRepository {
         (SELECT COUNT(*)::int FROM lot_media WHERE market_lot_id=ml.id AND type='image') AS "imageCount",
         (SELECT source_url FROM lot_media WHERE market_lot_id=ml.id AND type='video' LIMIT 1) AS "videoUrl",
         (SELECT COUNT(*)::int FROM lot_snapshots WHERE market_lot_id=ml.id) AS "snapshotCount",
-        (SELECT COUNT(*)::int FROM lot_change_log WHERE market_lot_id=ml.id) AS "changeCount"
+        (SELECT COUNT(*)::int FROM lot_change_log WHERE market_lot_id=ml.id) AS "changeCount",
+        ${sortBucket}::int AS "_sortBucket",
+        ${sortTime}::float AS "_sortTime",
+        ${sortLotNumber}::int AS "_sortLotNumber"
       FROM market_lots ml
       LEFT JOIN auction_events ae ON ae.id = ml.event_id
       LEFT JOIN real_estate_details red ON red.market_lot_id = ml.id
       LEFT JOIN vehicle_details vd ON vd.market_lot_id = ml.id
-      WHERE ${where}
-      ORDER BY ${lotOrderBy(filters.sort)}
+      WHERE ${where}${cursorWhere}
+      ORDER BY ${useKeyset
+    ? `${sortBucket},${sortTime},${sortLotNumber},ml.id`
+    : lotOrderBy(filters.sort)}
       LIMIT ${limit} OFFSET ${offset}
-    `, params);
-    const items = result.rows.map((row: Record<string, unknown>) => ({
-      ...row,
-      primaryImage: row.primaryMediaId ? `/api/media/${row.primaryMediaId}` : row.primarySourceUrl,
-    }));
-    return { items, total: totalResult.rows[0]?.total ?? 0, page: filters.page, pageSize: filters.pageSize };
+    `, params, signal);
+    const hasNext = useKeyset && result.rows.length > filters.pageSize;
+    if (hasNext) result.rows.pop();
+    const nextCursor = hasNext && result.rows.length ? encodeAuctionCursor(result.rows.at(-1)!) : undefined;
+    const items = result.rows.map((row: Record<string, unknown>) => {
+      const { _sortBucket, _sortTime, _sortLotNumber, ...item } = row;
+      return {
+        ...item,
+        primaryImage: item.primaryMediaId ? `/api/media/${item.primaryMediaId}` : item.primarySourceUrl,
+      };
+    });
+    return {
+      items,total: totalResult.rows[0]?.total ?? 0,page: filters.page,pageSize: filters.pageSize,
+      ...(nextCursor ? { nextCursor } : {}),
+    };
   }
 
   public async facets(filters: DashboardFilters): Promise<{ total: number; facets: Record<LotFacetKey, LotFacetOption[]> }> {
-    const definitions: Array<{ key: LotFacetKey; value: string; label?: string; limit?: number; orderBy?: string }> = [
-      { key: 'site', value: 'ml.site' },
-      { key: 'assetType', value: 'ml.asset_type' },
-      { key: 'event', value: 'ml.event_id::text', label: "COALESCE(ae.name,'Evento sem nome')", limit: 500 },
-      { key: 'status', value: canonicalStatusSql('ml') },
-      { key: 'brand', value: 'ml.brand' },
-      { key: 'model', value: 'ml.model', limit: 1000 },
-      { key: 'year', value: 'ml.model_year::text', orderBy: 'value::int DESC' },
-      { key: 'state', value: 'ml.state' },
-      { key: 'city', value: 'ml.city', limit: 500 },
+    return this.facetsCache.get(dashboardCacheKey(filters), () => this.loadFacets(filters));
+  }
+
+  private async loadFacets(filters: DashboardFilters): Promise<{
+    total: number; facets: Record<LotFacetKey, LotFacetOption[]>;
+  }> {
+    type FacetDefinition = {
+      key: LotFacetKey; value: string; label?: string; limit?: number; orderBy?: string;
+      groupedValue: string; groupedLabel?: string;
+    };
+    const definitions: FacetDefinition[] = [
+      { key: 'site', value: 'ml.site', groupedValue: 'ml.site' },
+      { key: 'assetType', value: 'ml.asset_type', groupedValue: 'ml.asset_type' },
+      { key: 'event', value: 'ml.event_id::text', label: "COALESCE(ae.name,'Evento sem nome')",
+        groupedValue: 'ml.event_id::text', groupedLabel: "COALESCE(ae.name,'Evento sem nome')", limit: 500 },
+      { key: 'status', value: canonicalStatusSql('ml'), groupedValue: canonicalStatusSql('ml') },
+      { key: 'brand', value: 'ml.brand', groupedValue: 'ml.brand' },
+      { key: 'model', value: 'ml.model', groupedValue: 'ml.model', limit: 1000 },
+      { key: 'year', value: 'ml.model_year::text', groupedValue: 'ml.model_year::text', orderBy: 'value::int DESC' },
+      { key: 'state', value: 'ml.state', groupedValue: 'ml.state' },
+      { key: 'city', value: 'ml.city', groupedValue: 'ml.city', limit: 500 },
       { key: 'neighborhood', value: '(SELECT red.neighborhood_normalized FROM real_estate_details red WHERE red.market_lot_id=ml.id)',
-        label: "(SELECT red.neighborhood FROM real_estate_details red WHERE red.market_lot_id=ml.id)", limit: 1000 },
-      { key: 'propertyType', value: '(SELECT red.property_type FROM real_estate_details red WHERE red.market_lot_id=ml.id)', limit: 500 },
-      { key: 'vehicleCondition', value: '(SELECT vd.vehicle_condition FROM vehicle_details vd WHERE vd.market_lot_id=ml.id)', limit: 100 },
-      { key: 'origin', value: 'ml.origin', limit: 500 },
-      { key: 'consignor', value: 'ml.consignor', limit: 1000 },
-      { key: 'classification', value: 'ml.classification' },
-      { key: 'fuel', value: 'ml.fuel' },
-      { key: 'transmission', value: 'ml.transmission' },
+        label: "(SELECT red.neighborhood FROM real_estate_details red WHERE red.market_lot_id=ml.id)",
+        groupedValue: 'red.neighborhood_normalized', groupedLabel: 'red.neighborhood', limit: 1000 },
+      { key: 'propertyType', value: '(SELECT red.property_type FROM real_estate_details red WHERE red.market_lot_id=ml.id)',
+        groupedValue: 'red.property_type', limit: 500 },
+      { key: 'vehicleCondition', value: '(SELECT vd.vehicle_condition FROM vehicle_details vd WHERE vd.market_lot_id=ml.id)',
+        groupedValue: 'vd.vehicle_condition', limit: 100 },
+      { key: 'origin', value: 'ml.origin', groupedValue: 'ml.origin', limit: 500 },
+      { key: 'consignor', value: 'ml.consignor', groupedValue: 'ml.consignor', limit: 1000 },
+      { key: 'classification', value: 'ml.classification', groupedValue: 'ml.classification' },
+      { key: 'fuel', value: 'ml.fuel', groupedValue: 'ml.fuel' },
+      { key: 'transmission', value: 'ml.transmission', groupedValue: 'ml.transmission' },
       {
         key: 'runningAtEntry',
         value: "CASE WHEN ml.running_at_entry IS TRUE THEN 'yes' WHEN ml.running_at_entry IS FALSE THEN 'no' END",
+        groupedValue: "CASE WHEN ml.running_at_entry IS TRUE THEN 'yes' WHEN ml.running_at_entry IS FALSE THEN 'no' END",
       },
     ];
+    const selectedKeys = new Set<LotFacetKey>([
+      ...(filters.sites?.length ? ['site' as const] : []),
+      ...(filters.assetTypes?.length ? ['assetType' as const] : []),
+      ...(filters.eventIds?.length ? ['event' as const] : []),
+      ...(filters.statuses?.length ? ['status' as const] : []),
+      ...(filters.brands?.length ? ['brand' as const] : []),
+      ...(filters.models?.length ? ['model' as const] : []),
+      ...(filters.years?.length ? ['year' as const] : []),
+      ...(filters.states?.length ? ['state' as const] : []),
+      ...(filters.cities?.length ? ['city' as const] : []),
+      ...(filters.neighborhoods?.length ? ['neighborhood' as const] : []),
+      ...(filters.propertyTypes?.length ? ['propertyType' as const] : []),
+      ...(filters.vehicleConditions?.length ? ['vehicleCondition' as const] : []),
+      ...(filters.origins?.length ? ['origin' as const] : []),
+      ...(filters.consignors?.length ? ['consignor' as const] : []),
+      ...(filters.classifications?.length ? ['classification' as const] : []),
+      ...(filters.fuels?.length ? ['fuel' as const] : []),
+      ...(filters.transmissions?.length ? ['transmission' as const] : []),
+      ...(filters.runningAtEntry !== undefined ? ['runningAtEntry' as const] : []),
+    ]);
+    const groupedDefinitions = definitions.filter((definition) => !selectedKeys.has(definition.key));
+    const selectedDefinitions = definitions.filter((definition) => selectedKeys.has(definition.key));
     const totalQuery = buildLotWhere(filters);
-    const [totalResult, ...facetResults] = await Promise.all([
+    const [totalResult, groupedResult, ...selectedResults] = await Promise.all([
       this.pool.query<{ total: number }>(
         `SELECT COUNT(*)::int AS total FROM market_lots ml WHERE ${totalQuery.where}`,
         totalQuery.params,
       ),
-      ...definitions.map((definition) => this.facetOptions(definition, filters)),
+      this.groupedFacetOptions(groupedDefinitions, filters),
+      ...selectedDefinitions.map((definition) => this.facetOptions(definition, filters)),
     ]);
-    const facets = Object.fromEntries(definitions.map((definition, index) => [
-      definition.key,
-      facetResults[index]?.rows ?? [],
-    ])) as Record<LotFacetKey, LotFacetOption[]>;
+    const facets = Object.fromEntries(
+      definitions.map((definition) => [definition.key, []]),
+    ) as unknown as Record<LotFacetKey, LotFacetOption[]>;
+    for (const row of groupedResult.rows) facets[row.key]?.push(row);
+    selectedDefinitions.forEach((definition, index) => {
+      facets[definition.key] = selectedResults[index]?.rows ?? [];
+    });
     return { total: totalResult.rows[0]?.total ?? 0, facets };
+  }
+
+  private async groupedFacetOptions(
+    definitions: Array<{
+      key: LotFacetKey; groupedValue: string; groupedLabel?: string; limit?: number; orderBy?: string;
+    }>,
+    filters: DashboardFilters,
+  ) {
+    if (!definitions.length) return { rows: [] as Array<LotFacetOption & { key: LotFacetKey }> };
+    const query = buildLotWhere(filters);
+    const values = definitions.map((definition) => `(
+      '${definition.key}'::text,
+      (${definition.groupedValue})::text,
+      (${definition.groupedLabel ?? definition.groupedValue})::text
+    )`).join(',');
+    const result = await this.pool.query<LotFacetOption & { key: LotFacetKey }>(`
+      WITH expanded AS MATERIALIZED (
+        SELECT facet.key,facet.value,facet.label
+        FROM market_lots ml
+        LEFT JOIN auction_events ae ON ae.id=ml.event_id
+        LEFT JOIN real_estate_details red ON red.market_lot_id=ml.id
+        LEFT JOIN vehicle_details vd ON vd.market_lot_id=ml.id
+        CROSS JOIN LATERAL (VALUES ${values}) facet(key,value,label)
+        WHERE ${query.where}
+          AND NULLIF(BTRIM(facet.value), '') IS NOT NULL
+      ), grouped AS (
+        SELECT key,value,label,COUNT(*)::int AS count
+        FROM expanded GROUP BY key,value,label
+      )
+      SELECT key,value,label,count
+      FROM grouped
+      ORDER BY key,
+        CASE WHEN key='year' THEN value::int END DESC NULLS LAST,
+        CASE WHEN key<>'year' THEN count END DESC NULLS LAST,
+        label ASC
+    `, query.params);
+    const limits = new Map(definitions.map((definition) => [definition.key, definition.limit ?? 120]));
+    const counts = new Map<LotFacetKey, number>();
+    return {
+      rows: result.rows.filter((row) => {
+        const count = counts.get(row.key) ?? 0;
+        counts.set(row.key, count + 1);
+        return count < (limits.get(row.key) ?? 120);
+      }),
+    };
   }
 
   private async facetOptions(

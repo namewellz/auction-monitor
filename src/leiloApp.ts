@@ -32,7 +32,19 @@ import {
   HdRealEstateCatalogProvider,
   JrRealEstateCatalogProvider,
   RioRealEstateCatalogProvider,
+  ThaisTeixeiraRealEstateCatalogProvider,
+  RigolonRealEstateCatalogProvider,
+  LeiloesJudiciaisBahiaRealEstateCatalogProvider,
+  FabioRealEstateCatalogProvider,
+  GalvaniRealEstateCatalogProvider,
+  JoseRodovalhoRealEstateCatalogProvider,
+  RosiOliveiraRealEstateCatalogProvider,
+  FidelisRealEstateCatalogProvider,
 } from './scrapers/providers/leiloesJudiciaisRealEstateCatalog.js';
+import {
+  SuporteLeiloesRealEstateCatalogProvider,
+} from './scrapers/providers/suporteLeiloesRealEstateCatalog.js';
+import { suporteLeiloesDefinitions } from './scrapers/providers/suporteLeiloesRealEstate.js';
 import { integrationDefinitions } from './integrations.js';
 
 const logger = new Logger(config.logLevel);
@@ -83,6 +95,16 @@ const bulkCollector = new CatalogCollectionService(
     new FranciscoFreitasRealEstateCatalogProvider(config.vlanceRequestIntervalMs),
     new RioRealEstateCatalogProvider(config.vlanceRequestIntervalMs),
     new HdRealEstateCatalogProvider(config.vlanceRequestIntervalMs),
+    new ThaisTeixeiraRealEstateCatalogProvider(config.vlanceRequestIntervalMs),
+    new RigolonRealEstateCatalogProvider(config.vlanceRequestIntervalMs),
+    new LeiloesJudiciaisBahiaRealEstateCatalogProvider(config.vlanceRequestIntervalMs),
+    new FabioRealEstateCatalogProvider(config.vlanceRequestIntervalMs),
+    new GalvaniRealEstateCatalogProvider(config.vlanceRequestIntervalMs),
+    new JoseRodovalhoRealEstateCatalogProvider(config.vlanceRequestIntervalMs),
+    new RosiOliveiraRealEstateCatalogProvider(config.vlanceRequestIntervalMs),
+    new FidelisRealEstateCatalogProvider(config.vlanceRequestIntervalMs),
+    ...suporteLeiloesDefinitions.map((definition) =>
+      new SuporteLeiloesRealEstateCatalogProvider(definition, config.vlanceRequestIntervalMs)),
     new SuperbidCatalogProvider(config.superbidCatalogPageSize, config.superbidRequestIntervalMs,
       config.superbidCatalogMaxOffers),
   ],

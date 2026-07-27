@@ -31,5 +31,15 @@ export function integrationDefinitions(leiloApiUrl: string): IntegrationDefiniti
     { site: 'franciscofreitasleiloes', name: 'Francisco Freitas Leilões', catalog: 'real_estate', publicUrl: 'https://franciscofreitasleiloes.com.br/', collectionUrl: 'https://franciscofreitasleiloes.com.br/core/api/get-lotes', scopes: ['Imóveis'] },
     { site: 'rioleiloes', name: 'Rio Leilões', catalog: 'real_estate', publicUrl: 'https://www.rioleiloes.com.br/', collectionUrl: 'https://www.rioleiloes.com.br/core/api/get-lotes', scopes: ['Imóveis'] },
     { site: 'hdleiloes', name: 'HD Leilões', catalog: 'real_estate', publicUrl: 'https://www.hdleiloes.com.br/', collectionUrl: 'https://www.hdleiloes.com.br/core/api/get-lotes', scopes: ['Imóveis'] },
+    { site: 'trileiloes', name: 'TRI Leilões', catalog: 'real_estate', publicUrl: 'https://trileiloes.com.br/leiloes', collectionUrl: 'https://trileiloes.com.br/leiloes', scopes: ['Imóveis'] },
+    { site: 'thaisteixeiraleiloes', name: 'Thaís Teixeira Leilões', catalog: 'real_estate', publicUrl: 'https://www.thaisteixeiraleiloes.com.br/externo/', collectionUrl: 'https://www.thaisteixeiraleiloes.com.br/core/api/get-lotes', scopes: ['Imóveis'] },
+    { site: 'valeroleiloes', name: 'Valero Leilões', catalog: 'real_estate', publicUrl: 'https://valeroleiloes.com.br/', collectionUrl: 'https://valeroleiloes.com.br/leiloes', scopes: ['Imóveis'] },
+    { site: 'rigolonleiloes', name: 'Rigolon Leilões', catalog: 'real_estate', publicUrl: 'https://www.rigolonleiloes.com.br/externo', collectionUrl: 'https://www.rigolonleiloes.com.br/core/api/get-lotes', scopes: ['Imóveis'] },
+    { site: 'leiloesjudiciaisbahia', name: 'Leilões Judiciais Bahia', catalog: 'real_estate', publicUrl: 'https://www.leiloesjudiciaisbahia.com.br/externo/', collectionUrl: 'https://www.leiloesjudiciaisbahia.com.br/core/api/get-lotes', scopes: ['Imóveis'] },
+    { site: 'fabioleiloes', name: 'Fábio Leilões', catalog: 'real_estate', publicUrl: 'https://www.fabioleiloes.com.br/', collectionUrl: 'https://www.fabioleiloes.com.br/core/api/get-lotes', scopes: ['Imóveis'] },
+    { site: 'galvanileiloes', name: 'Galvani Leilões', catalog: 'real_estate', publicUrl: 'https://www.galvanileiloes.com.br/', collectionUrl: 'https://www.galvanileiloes.com.br/core/api/get-lotes', scopes: ['Imóveis'] },
+    { site: 'joserodovalholeiloes', name: 'José Rodovalho Leilões', catalog: 'real_estate', publicUrl: 'https://www.joserodovalholeiloes.com.br/', collectionUrl: 'https://www.joserodovalholeiloes.com.br/core/api/get-lotes', scopes: ['Imóveis'] },
+    { site: 'rosioliveiraleiloes', name: 'Rosi Oliveira Leilões', catalog: 'real_estate', publicUrl: 'https://rosioliveiraleiloes.com.br/', collectionUrl: 'https://rosioliveiraleiloes.com.br/core/api/get-lotes', scopes: ['Imóveis'] },
+    { site: 'fidelisleiloes', name: 'Fidelis Leilões', catalog: 'real_estate', publicUrl: 'https://www.fidelisleiloes.com.br/', collectionUrl: 'https://www.fidelisleiloes.com.br/core/api/get-lotes', scopes: ['Imóveis'] },
   ];
 }

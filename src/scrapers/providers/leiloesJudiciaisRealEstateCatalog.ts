@@ -79,3 +79,83 @@ export class HdRealEstateCatalogProvider extends AlessandroTeixeiraRealEstateCat
     });
   }
 }
+
+export class ThaisTeixeiraRealEstateCatalogProvider extends AlessandroTeixeiraRealEstateCatalogProvider {
+  public constructor(requestIntervalMs = 750) {
+    super(requestIntervalMs, {
+      site: 'thaisteixeiraleiloes',
+      baseUrl: 'https://www.thaisteixeiraleiloes.com.br',
+      catalogType: '3',
+    });
+  }
+}
+
+export class RigolonRealEstateCatalogProvider extends AlessandroTeixeiraRealEstateCatalogProvider {
+  public constructor(requestIntervalMs = 750) {
+    super(requestIntervalMs, {
+      site: 'rigolonleiloes',
+      baseUrl: 'https://www.rigolonleiloes.com.br',
+      catalogType: '3',
+    });
+  }
+}
+
+export class LeiloesJudiciaisBahiaRealEstateCatalogProvider extends AlessandroTeixeiraRealEstateCatalogProvider {
+  public constructor(requestIntervalMs = 750) {
+    super(requestIntervalMs, {
+      site: 'leiloesjudiciaisbahia',
+      baseUrl: 'https://www.leiloesjudiciaisbahia.com.br',
+      catalogType: '3',
+    });
+  }
+}
+
+export class FabioRealEstateCatalogProvider extends AlessandroTeixeiraRealEstateCatalogProvider {
+  public constructor(requestIntervalMs = 750) {
+    super(requestIntervalMs, {
+      site: 'fabioleiloes',
+      baseUrl: 'https://www.fabioleiloes.com.br',
+      catalogType: '3',
+    });
+  }
+}
+
+export class GalvaniRealEstateCatalogProvider extends AlessandroTeixeiraRealEstateCatalogProvider {
+  public constructor(requestIntervalMs = 750) {
+    super(requestIntervalMs, {
+      site: 'galvanileiloes',
+      baseUrl: 'https://www.galvanileiloes.com.br',
+      catalogType: '3',
+    });
+  }
+}
+
+export class JoseRodovalhoRealEstateCatalogProvider extends AlessandroTeixeiraRealEstateCatalogProvider {
+  public constructor(requestIntervalMs = 750) {
+    super(requestIntervalMs, {
+      site: 'joserodovalholeiloes',
+      baseUrl: 'https://www.joserodovalholeiloes.com.br',
+      catalogType: '3',
+    });
+  }
+}
+
+export class RosiOliveiraRealEstateCatalogProvider extends AlessandroTeixeiraRealEstateCatalogProvider {
+  public constructor(requestIntervalMs = 750) {
+    super(requestIntervalMs, {
+      site: 'rosioliveiraleiloes',
+      baseUrl: 'https://rosioliveiraleiloes.com.br',
+      catalogType: '3',
+    });
+  }
+}
+
+export class FidelisRealEstateCatalogProvider extends AlessandroTeixeiraRealEstateCatalogProvider {
+  public constructor(requestIntervalMs = 750) {
+    super(requestIntervalMs, {
+      site: 'fidelisleiloes',
+      baseUrl: 'https://www.fidelisleiloes.com.br',
+      catalogType: '3',
+    });
+  }
+}

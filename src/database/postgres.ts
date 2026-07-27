@@ -241,6 +241,10 @@ export async function runPostgresMigrations(pool: Pool): Promise<void> {
     CREATE OR REPLACE FUNCTION refresh_lot_media_summary(target_lot_id BIGINT)
     RETURNS VOID LANGUAGE plpgsql AS $function$
     BEGIN
+      IF NOT EXISTS (SELECT 1 FROM market_lots WHERE id=target_lot_id) THEN
+        DELETE FROM lot_media_summary WHERE market_lot_id=target_lot_id;
+        RETURN;
+      END IF;
       INSERT INTO lot_media_summary (
         market_lot_id,total_media,total_images,downloaded_images,image_bytes,updated_at
       )

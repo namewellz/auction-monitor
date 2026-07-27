@@ -9,8 +9,8 @@ parâmetros de rastreamento (`utm_*`).
 ## Resumo
 
 - Total da lista: **43 sites**
-- Integrados no código: **18**
-- Pendentes: **25**
+- Integrados no código: **28**
+- Pendentes: **15**
 - Integração existente fora da lista: **1** (Franco Leilões)
 
 ## Critério para considerar uma integração concluída
@@ -49,32 +49,32 @@ mais recentes estão validadas localmente e aguardam publicação.
 - [x] **Francisco Freitas Leilões** — `franciscofreitasleiloes.com.br` — identidade atual de Norte Nordeste Leilões; 102 lotes válidos localmente
 - [x] **Rio Leilões** — `rioleiloes.com.br` — 76 lotes válidos localmente
 - [x] **HD Leilões** — `hdleiloes.com.br` — 52 lotes válidos localmente
+- [x] **TRI Leilões** — `trileiloes.com.br` — plataforma Suporte Leilões; integração de eventos e lotes
+- [x] **Thaís Teixeira Leilões** — `thaisteixeiraleiloes.com.br` — 54 lotes identificados
+- [x] **Valero Leilões** — `valeroleiloes.com.br` — plataforma Suporte Leilões; 48 referências identificadas
+- [x] **Rigolon Leilões** — `rigolonleiloes.com.br` — 47 lotes identificados
+- [x] **Leilões Judiciais Bahia** — `leiloesjudiciaisbahia.com.br` — 37 lotes identificados
+- [x] **Fábio Leilões** — `fabioleiloes.com.br` — 27 lotes identificados
+- [x] **Galvani Leilões** — `galvanileiloes.com.br` — 27 lotes identificados
+- [x] **José Rodovalho Leilões** — `joserodovalholeiloes.com.br` — 27 lotes identificados
+- [x] **Rosi Oliveira Leilões** — `rosioliveiraleiloes.com.br` — sucessora do domínio DM; 15 lotes identificados
+- [x] **Fidelis Leilões** — `fidelisleiloes.com.br` — 14 lotes identificados
 
 ## Pendentes
 
-- [ ] **DM Leilões Judiciais** — https://www.dmleiloesjudiciais.com.br/externo/ — domínio redireciona atualmente para Rosi Oliveira Leilões; validar identidade antes de integrar
 - [ ] **Dias Leilões** — https://www.diasleiloes.com.br/
 - [ ] **Fábio Barbosa Leilões** — https://www.fabiobarbosaleiloes.com.br/
-- [ ] **Fábio Leilões** — https://www.fabioleiloes.com.br/
-- [ ] **Fidelis Leilões** — http://www.fidelisleiloes.com.br/
-- [ ] **Galvani Leilões** — https://www.galvanileiloes.com.br/
 - [ ] **Gilson Leilões** — https://gilsonleiloes.com.br/
 - [ ] **Insigne Leilões** — https://www.insigneleiloes.com.br/
 - [ ] **JD Leilões** — https://www.jdleiloes.com.br/
-- [ ] **José Rodovalho Leilões** — https://www.joserodovalholeiloes.com.br/
 - [ ] **Leilões Centro-Oeste** — https://www.leiloescentrooeste.com.br/
-- [ ] **Leilões Judiciais Bahia** — https://www.leiloesjudiciaisbahia.com.br/externo/
 - [ ] **Leilões Zanoni** — https://www.leiloeszanoni.com.br/
 - [ ] **Maria Fixer Leilões** — https://www.mariafixerleiloes.com.br/
 - [ ] **Mato Grosso Leilões** — https://www.matogrossoleiloes.com.br/
 - [ ] **Milan Leilões** — https://www.milanleiloes.com.br/
 - [ ] **Planalto Leilões** — https://www.planaltoleiloes.com.br/externo/
-- [ ] **Rigolon Leilões** — https://www.rigolonleiloes.com.br/externo
 - [ ] **Leiloeiro Público** — https://www.leiloeiropublico.com.br/
 - [ ] **Sato Leilões** — https://www.satoleiloes.com.br/
-- [ ] **Thaís Teixeira Leilões** — https://www.thaisteixeiraleiloes.com.br/externo/
-- [ ] **TRI Leilões** — https://www.trileiloes.com.br/
-- [ ] **Valero Leilões** — https://www.valeroleiloes.com.br/
 - [ ] **Verde Amarelo Leilões** — https://www.verdeamareloleiloes.com.br/
 - [ ] **Verri Leilões** — https://www.verrileiloes.com.br/
 

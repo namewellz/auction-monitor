@@ -20,6 +20,14 @@ export const vlanceRealEstateDefinitions = [
   { site: 'franciscofreitasleiloes', host: 'franciscofreitasleiloes.com.br', baseUrl: 'https://franciscofreitasleiloes.com.br', catalogType: '3' },
   { site: 'rioleiloes', host: 'rioleiloes.com.br', baseUrl: 'https://www.rioleiloes.com.br', catalogType: '3' },
   { site: 'hdleiloes', host: 'hdleiloes.com.br', baseUrl: 'https://www.hdleiloes.com.br', catalogType: '3' },
+  { site: 'thaisteixeiraleiloes', host: 'thaisteixeiraleiloes.com.br', baseUrl: 'https://www.thaisteixeiraleiloes.com.br', catalogType: '3' },
+  { site: 'rigolonleiloes', host: 'rigolonleiloes.com.br', baseUrl: 'https://www.rigolonleiloes.com.br', catalogType: '3' },
+  { site: 'leiloesjudiciaisbahia', host: 'leiloesjudiciaisbahia.com.br', baseUrl: 'https://www.leiloesjudiciaisbahia.com.br', catalogType: '3' },
+  { site: 'fabioleiloes', host: 'fabioleiloes.com.br', baseUrl: 'https://www.fabioleiloes.com.br', catalogType: '3' },
+  { site: 'galvanileiloes', host: 'galvanileiloes.com.br', baseUrl: 'https://www.galvanileiloes.com.br', catalogType: '3' },
+  { site: 'joserodovalholeiloes', host: 'joserodovalholeiloes.com.br', baseUrl: 'https://www.joserodovalholeiloes.com.br', catalogType: '3' },
+  { site: 'rosioliveiraleiloes', host: 'rosioliveiraleiloes.com.br', baseUrl: 'https://rosioliveiraleiloes.com.br', catalogType: '3' },
+  { site: 'fidelisleiloes', host: 'fidelisleiloes.com.br', baseUrl: 'https://www.fidelisleiloes.com.br', catalogType: '3' },
 ] as const;
 
 type VlanceRealEstateDefinition = (typeof vlanceRealEstateDefinitions)[number];

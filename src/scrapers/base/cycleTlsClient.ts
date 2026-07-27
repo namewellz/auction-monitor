@@ -35,7 +35,7 @@ export async function fetchHtml(url: string, options: FetchHtmlOptions = {}): Pr
       throw new Error(`Request failed with status ${response.status}`);
     }
 
-    return response.body;
+    return response.body ?? await response.text();
   } finally {
     await cycleTLS.exit();
   }

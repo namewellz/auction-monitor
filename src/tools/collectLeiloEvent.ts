@@ -33,6 +33,9 @@ try {
     imageMaxWidth: config.mediaImageMaxWidth,
     imageMaxHeight: config.mediaImageMaxHeight,
     imageQuality: config.mediaImageQuality,
+    ...(config.milanFlareSolverrUrl
+      ? { milanFlareSolverrUrl: config.milanFlareSolverrUrl }
+      : {}),
   });
   await mediaStorage.initialize();
   const collector = new CatalogCollectionService(

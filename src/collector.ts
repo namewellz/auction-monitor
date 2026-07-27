@@ -23,6 +23,9 @@ const mediaStorage = new MediaStorageService(repository, logger, {
   imageMaxWidth: config.mediaImageMaxWidth,
   imageMaxHeight: config.mediaImageMaxHeight,
   imageQuality: config.mediaImageQuality,
+  ...(config.milanFlareSolverrUrl
+    ? { milanFlareSolverrUrl: config.milanFlareSolverrUrl }
+    : {}),
 });
 await mediaStorage.initialize();
 const scraperFactory = createScraperFactory(config);

@@ -1,7 +1,11 @@
 declare module 'cycletls' {
   export interface CycleTLSResponse {
     status: number;
-    body: string;
+    body?: string;
+    data?: unknown;
+    finalUrl?: string;
+    headers?: Record<string, unknown>;
+    text(): Promise<string>;
   }
 
   export interface CycleTLSClient {

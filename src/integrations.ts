@@ -41,5 +41,6 @@ export function integrationDefinitions(leiloApiUrl: string): IntegrationDefiniti
     { site: 'joserodovalholeiloes', name: 'José Rodovalho Leilões', catalog: 'real_estate', publicUrl: 'https://www.joserodovalholeiloes.com.br/', collectionUrl: 'https://www.joserodovalholeiloes.com.br/core/api/get-lotes', scopes: ['Imóveis'] },
     { site: 'rosioliveiraleiloes', name: 'Rosi Oliveira Leilões', catalog: 'real_estate', publicUrl: 'https://rosioliveiraleiloes.com.br/', collectionUrl: 'https://rosioliveiraleiloes.com.br/core/api/get-lotes', scopes: ['Imóveis'] },
     { site: 'fidelisleiloes', name: 'Fidelis Leilões', catalog: 'real_estate', publicUrl: 'https://www.fidelisleiloes.com.br/', collectionUrl: 'https://www.fidelisleiloes.com.br/core/api/get-lotes', scopes: ['Imóveis'] },
+    { site: 'milanleiloes', name: 'Milan Leilões', catalog: 'real_estate', publicUrl: 'https://milanleiloes.com.br/pesquisa/imoveis', collectionUrl: 'https://milanleiloes.com.br/pesquisa/imoveis', scopes: ['Imóveis'] },
   ];
 }

@@ -14,6 +14,7 @@ import {
   SuporteLeiloesRealEstateScraper,
   suporteLeiloesDefinitions,
 } from './providers/suporteLeiloesRealEstate.js';
+import { MilanRealEstateScraper } from './providers/milanRealEstate.js';
 import type { VipLeiloesClient } from './providers/vipLeiloesClient.js';
 import { ScraperFactory } from './scraperFactory.js';
 
@@ -30,6 +31,7 @@ export function createScraperFactory(
     new D1LanceRealEstateScraper(),
     ...vlanceRealEstateDefinitions.map((definition) => new VlanceRealEstateScraper(definition)),
     ...suporteLeiloesDefinitions.map((definition) => new SuporteLeiloesRealEstateScraper(definition)),
+    new MilanRealEstateScraper(config.milanFlareSolverrUrl),
     new ExampleSiteScraper(config.exampleScraperHosts),
   ]);
 }

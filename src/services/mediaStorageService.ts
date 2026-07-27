@@ -10,6 +10,7 @@ import type {
 } from '../database/historicalRepository.js';
 import type { Logger } from '../utils/logger.js';
 import { ImageOptimizer, type OptimizedImage } from './imageOptimizer.js';
+import { MilanPageClient } from '../scrapers/providers/milanRealEstateCatalog.js';
 
 export interface MediaDownloadResult {
   queued: number;
@@ -29,6 +30,7 @@ export interface MediaOptimizationResult {
 export class MediaStorageService {
   private readonly client: Client;
   private readonly imageOptimizer: ImageOptimizer;
+  private readonly milanClient: MilanPageClient | undefined;
   private pendingDownload: Promise<MediaDownloadResult> | undefined;
 
   public constructor(
@@ -45,6 +47,7 @@ export class MediaStorageService {
       imageMaxWidth: number;
       imageMaxHeight: number;
       imageQuality: number;
+      milanFlareSolverrUrl?: string;
     },
   ) {
     this.client = new Client({
@@ -59,6 +62,9 @@ export class MediaStorageService {
       options.imageMaxHeight,
       options.imageQuality,
     );
+    this.milanClient = options.milanFlareSolverrUrl
+      ? new MilanPageClient(options.milanFlareSolverrUrl)
+      : undefined;
   }
 
   public async initialize(): Promise<void> {
@@ -91,8 +97,13 @@ export class MediaStorageService {
           result.downloaded += 1;
           result.bytes += size;
         } catch (error) {
-          result.failed += 1;
           const message = error instanceof Error ? error.message : String(error);
+          if (message === 'Empty image') {
+            await this.repository.markMediaUnavailable(item.id, message);
+            this.logger.info('Empty media source marked unavailable', { mediaId: item.id, url: item.sourceUrl });
+            continue;
+          }
+          result.failed += 1;
           await this.repository.markMediaFailed(item.id, message);
           this.logger.warn('Media download failed', { mediaId: item.id, url: item.sourceUrl, error: message });
         }
@@ -201,38 +212,53 @@ export class MediaStorageService {
   }
 
   private async download(item: PendingMedia): Promise<number> {
-    const response = await fetch(item.sourceUrl, {
-      headers: {
-        accept: 'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8',
-        'user-agent': 'Mozilla/5.0 (compatible; AuctionMonitor/1.0)',
-      },
-      signal: AbortSignal.timeout(30_000),
+    if (isPlaceholderMediaUrl(item.sourceUrl)) throw new Error('Empty image');
+    const resource = await this.fetchResource(item, {
+      accept: 'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8',
+      timeoutMs: 30_000,
     });
-    if (!response.ok) throw new Error(`HTTP ${response.status}`);
-
-    const contentType = normalizeContentType(response.headers.get('content-type'));
+    const contentType = normalizeContentType(resource.contentType);
     if (!contentType.startsWith('image/')) throw new Error(`Unexpected content type: ${contentType}`);
-    const body = Buffer.from(await response.arrayBuffer());
-    if (body.length === 0) throw new Error('Empty image');
+    if (resource.body.length === 0) throw new Error('Empty image');
 
-    const optimized = await this.imageOptimizer.optimize(body);
+    const optimized = await this.imageOptimizer.optimize(resource.body);
     const stored = await this.storeOptimized(optimized, item.sourceUrl, item.site);
     await this.repository.markMediaDownloaded(item.id, stored);
     return optimized.buffer.length;
   }
 
-  private async downloadDocument(item: PendingDocument): Promise<number> {
+  private async fetchResource(
+    item: PendingMedia,
+    options: { accept: string; timeoutMs: number },
+  ): Promise<{ body: Buffer; contentType: string }> {
     const response = await fetch(item.sourceUrl, {
       headers: {
-        accept: 'application/pdf,application/octet-stream;q=0.9,*/*;q=0.8',
+        accept: options.accept,
         'user-agent': 'Mozilla/5.0 (compatible; AuctionMonitor/1.0)',
+        ...(item.site === 'milanleiloes' ? { referer: 'https://milanleiloes.com.br/' } : {}),
       },
-      signal: AbortSignal.timeout(60_000),
+      signal: AbortSignal.timeout(options.timeoutMs),
     });
-    if (!response.ok) throw new Error(`HTTP ${response.status}`);
-    const body = Buffer.from(await response.arrayBuffer());
+    if (response.ok) {
+      return {
+        body: Buffer.from(await response.arrayBuffer()),
+        contentType: response.headers.get('content-type') ?? 'application/octet-stream',
+      };
+    }
+    if (response.status === 403 && item.site === 'milanleiloes' && this.milanClient) {
+      return this.milanClient.downloadBinary(item.sourceUrl);
+    }
+    throw new Error(`HTTP ${response.status}`);
+  }
+
+  private async downloadDocument(item: PendingDocument): Promise<number> {
+    const resource = await this.fetchResource(item, {
+      accept: 'application/pdf,application/octet-stream;q=0.9,*/*;q=0.8',
+      timeoutMs: 60_000,
+    });
+    const body = resource.body;
     if (!body.length) throw new Error('Empty document');
-    const receivedType = normalizeContentType(response.headers.get('content-type'));
+    const receivedType = normalizeContentType(resource.contentType);
     const isPdf = receivedType === 'application/pdf' || body.subarray(0, 5).toString('ascii') === '%PDF-';
     const contentType = isPdf ? 'application/pdf' : receivedType;
     const contentHash = createHash('sha256').update(body).digest('hex');
@@ -366,6 +392,11 @@ function isNotFound(error: unknown): boolean {
   if (!error || typeof error !== 'object') return false;
   const candidate = error as { code?: string; statusCode?: number };
   return candidate.statusCode === 404 || ['NotFound', 'NoSuchKey', 'NoSuchObject'].includes(candidate.code ?? '');
+}
+
+function isPlaceholderMediaUrl(value: string): boolean {
+  return !/^https?:\/\//i.test(value)
+    || /fotoNaoEncontrada|sem[-_]?foto|placeholder/i.test(value);
 }
 
 async function streamToBuffer(stream: Readable): Promise<Buffer> {

@@ -9,8 +9,8 @@ parâmetros de rastreamento (`utm_*`).
 ## Resumo
 
 - Total da lista: **43 sites**
-- Integrados no código: **28**
-- Pendentes: **15**
+- Integrados no código: **29**
+- Pendentes: **14**
 - Integração existente fora da lista: **1** (Franco Leilões)
 
 ## Critério para considerar uma integração concluída
@@ -59,6 +59,9 @@ mais recentes estão validadas localmente e aguardam publicação.
 - [x] **José Rodovalho Leilões** — `joserodovalholeiloes.com.br` — 27 lotes identificados
 - [x] **Rosi Oliveira Leilões** — `rosioliveiraleiloes.com.br` — sucessora do domínio DM; 15 lotes identificados
 - [x] **Fidelis Leilões** — `fidelisleiloes.com.br` — 14 lotes identificados
+- [x] **Milan Leilões** — `milanleiloes.com.br` — 57 lotes identificados; parser, mídia,
+  documentos e revalidação implementados. O acesso protegido pelo Cloudflare usa o
+  FlareSolverr interno via `MILAN_FLARESOLVERR_URL`, com imagem ARM64.
 
 ## Pendentes
 
@@ -71,7 +74,6 @@ mais recentes estão validadas localmente e aguardam publicação.
 - [ ] **Leilões Zanoni** — https://www.leiloeszanoni.com.br/
 - [ ] **Maria Fixer Leilões** — https://www.mariafixerleiloes.com.br/
 - [ ] **Mato Grosso Leilões** — https://www.matogrossoleiloes.com.br/
-- [ ] **Milan Leilões** — https://www.milanleiloes.com.br/
 - [ ] **Planalto Leilões** — https://www.planaltoleiloes.com.br/externo/
 - [ ] **Leiloeiro Público** — https://www.leiloeiropublico.com.br/
 - [ ] **Sato Leilões** — https://www.satoleiloes.com.br/

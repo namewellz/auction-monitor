@@ -45,6 +45,7 @@ import {
   SuporteLeiloesRealEstateCatalogProvider,
 } from './scrapers/providers/suporteLeiloesRealEstateCatalog.js';
 import { suporteLeiloesDefinitions } from './scrapers/providers/suporteLeiloesRealEstate.js';
+import { MilanPageClient, MilanRealEstateCatalogProvider } from './scrapers/providers/milanRealEstateCatalog.js';
 import { integrationDefinitions } from './integrations.js';
 
 const logger = new Logger(config.logLevel);
@@ -62,6 +63,9 @@ const mediaStorage = new MediaStorageService(historicalRepository, logger, {
   imageMaxWidth: config.mediaImageMaxWidth,
   imageMaxHeight: config.mediaImageMaxHeight,
   imageQuality: config.mediaImageQuality,
+  ...(config.milanFlareSolverrUrl
+    ? { milanFlareSolverrUrl: config.milanFlareSolverrUrl }
+    : {}),
 });
 await mediaStorage.initialize();
 const vipClient = new VipLeiloesClient('https://www.vipleiloes.com.br', config.vipRequestIntervalMs);
@@ -105,6 +109,10 @@ const bulkCollector = new CatalogCollectionService(
     new FidelisRealEstateCatalogProvider(config.vlanceRequestIntervalMs),
     ...suporteLeiloesDefinitions.map((definition) =>
       new SuporteLeiloesRealEstateCatalogProvider(definition, config.vlanceRequestIntervalMs)),
+    new MilanRealEstateCatalogProvider(
+      config.milanRequestIntervalMs,
+      new MilanPageClient(config.milanFlareSolverrUrl),
+    ),
     new SuperbidCatalogProvider(config.superbidCatalogPageSize, config.superbidRequestIntervalMs,
       config.superbidCatalogMaxOffers),
   ],

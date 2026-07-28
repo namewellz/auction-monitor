@@ -9,8 +9,8 @@ parâmetros de rastreamento (`utm_*`).
 ## Resumo
 
 - Total da lista: **43 sites**
-- Integrados no código: **29**
-- Pendentes: **14**
+- Integrados no código: **34**
+- Pendentes: **9**
 - Integração existente fora da lista: **1** (Franco Leilões)
 
 ## Critério para considerar uma integração concluída
@@ -62,21 +62,24 @@ mais recentes estão validadas localmente e aguardam publicação.
 - [x] **Milan Leilões** — `milanleiloes.com.br` — 57 lotes identificados; parser, mídia,
   documentos e revalidação implementados. O acesso protegido pelo Cloudflare usa o
   FlareSolverr interno via `MILAN_FLARESOLVERR_URL`, com imagem ARM64.
+- [x] **Leiloeiro Público** — `leiloeiropublico.com.br` — integração ASP.NET + API de
+  lances; 992 imóveis identificados nos eventos publicados.
+- [x] **Sato Leilões** — `satoleiloes.com.br` — integração Vue/Inertia; 126 imóveis,
+  fotos e documentos identificados.
+- [x] **Gilson Leilões** — `gilsonleiloes.com.br` — plataforma VLance; 6 imóveis ativos.
+- [x] **JD Leilões** — `jdleiloes.com.br` — plataforma VLance; 10 imóveis ativos.
+- [x] **Maria Fixer Leilões** — `mariafixerleiloes.com.br` — plataforma VLance;
+  13 imóveis ativos.
 
 ## Pendentes
 
 - [ ] **Dias Leilões** — https://www.diasleiloes.com.br/
 - [ ] **Fábio Barbosa Leilões** — https://www.fabiobarbosaleiloes.com.br/
-- [ ] **Gilson Leilões** — https://gilsonleiloes.com.br/
 - [ ] **Insigne Leilões** — https://www.insigneleiloes.com.br/
-- [ ] **JD Leilões** — https://www.jdleiloes.com.br/
 - [ ] **Leilões Centro-Oeste** — https://www.leiloescentrooeste.com.br/
 - [ ] **Leilões Zanoni** — https://www.leiloeszanoni.com.br/
-- [ ] **Maria Fixer Leilões** — https://www.mariafixerleiloes.com.br/
 - [ ] **Mato Grosso Leilões** — https://www.matogrossoleiloes.com.br/
 - [ ] **Planalto Leilões** — https://www.planaltoleiloes.com.br/externo/
-- [ ] **Leiloeiro Público** — https://www.leiloeiropublico.com.br/
-- [ ] **Sato Leilões** — https://www.satoleiloes.com.br/
 - [ ] **Verde Amarelo Leilões** — https://www.verdeamareloleiloes.com.br/
 - [ ] **Verri Leilões** — https://www.verrileiloes.com.br/
 

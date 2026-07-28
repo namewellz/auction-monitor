@@ -159,3 +159,33 @@ export class FidelisRealEstateCatalogProvider extends AlessandroTeixeiraRealEsta
     });
   }
 }
+
+export class GilsonRealEstateCatalogProvider extends AlessandroTeixeiraRealEstateCatalogProvider {
+  public constructor(requestIntervalMs = 750) {
+    super(requestIntervalMs, {
+      site: 'gilsonleiloes',
+      baseUrl: 'https://www.gilsonleiloes.com.br',
+      catalogType: '3',
+    });
+  }
+}
+
+export class JdRealEstateCatalogProvider extends AlessandroTeixeiraRealEstateCatalogProvider {
+  public constructor(requestIntervalMs = 750) {
+    super(requestIntervalMs, {
+      site: 'jdleiloes',
+      baseUrl: 'https://www.jdleiloes.com.br',
+      catalogType: '3',
+    });
+  }
+}
+
+export class MariaFixerRealEstateCatalogProvider extends AlessandroTeixeiraRealEstateCatalogProvider {
+  public constructor(requestIntervalMs = 750) {
+    super(requestIntervalMs, {
+      site: 'mariafixerleiloes',
+      baseUrl: 'https://www.mariafixerleiloes.com.br',
+      catalogType: '3',
+    });
+  }
+}

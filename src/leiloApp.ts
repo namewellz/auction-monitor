@@ -40,12 +40,17 @@ import {
   JoseRodovalhoRealEstateCatalogProvider,
   RosiOliveiraRealEstateCatalogProvider,
   FidelisRealEstateCatalogProvider,
+  GilsonRealEstateCatalogProvider,
+  JdRealEstateCatalogProvider,
+  MariaFixerRealEstateCatalogProvider,
 } from './scrapers/providers/leiloesJudiciaisRealEstateCatalog.js';
 import {
   SuporteLeiloesRealEstateCatalogProvider,
 } from './scrapers/providers/suporteLeiloesRealEstateCatalog.js';
 import { suporteLeiloesDefinitions } from './scrapers/providers/suporteLeiloesRealEstate.js';
 import { MilanPageClient, MilanRealEstateCatalogProvider } from './scrapers/providers/milanRealEstateCatalog.js';
+import { SatoRealEstateCatalogProvider } from './scrapers/providers/satoRealEstateCatalog.js';
+import { LeiloeiroPublicoRealEstateCatalogProvider } from './scrapers/providers/leiloeiroPublicoRealEstateCatalog.js';
 import { integrationDefinitions } from './integrations.js';
 
 const logger = new Logger(config.logLevel);
@@ -107,6 +112,11 @@ const bulkCollector = new CatalogCollectionService(
     new JoseRodovalhoRealEstateCatalogProvider(config.vlanceRequestIntervalMs),
     new RosiOliveiraRealEstateCatalogProvider(config.vlanceRequestIntervalMs),
     new FidelisRealEstateCatalogProvider(config.vlanceRequestIntervalMs),
+    new GilsonRealEstateCatalogProvider(config.vlanceRequestIntervalMs),
+    new JdRealEstateCatalogProvider(config.vlanceRequestIntervalMs),
+    new MariaFixerRealEstateCatalogProvider(config.vlanceRequestIntervalMs),
+    new LeiloeiroPublicoRealEstateCatalogProvider(config.vlanceRequestIntervalMs),
+    new SatoRealEstateCatalogProvider(config.vlanceRequestIntervalMs),
     ...suporteLeiloesDefinitions.map((definition) =>
       new SuporteLeiloesRealEstateCatalogProvider(definition, config.vlanceRequestIntervalMs)),
     new MilanRealEstateCatalogProvider(

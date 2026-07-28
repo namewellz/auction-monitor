@@ -28,6 +28,9 @@ export const vlanceRealEstateDefinitions = [
   { site: 'joserodovalholeiloes', host: 'joserodovalholeiloes.com.br', baseUrl: 'https://www.joserodovalholeiloes.com.br', catalogType: '3' },
   { site: 'rosioliveiraleiloes', host: 'rosioliveiraleiloes.com.br', baseUrl: 'https://rosioliveiraleiloes.com.br', catalogType: '3' },
   { site: 'fidelisleiloes', host: 'fidelisleiloes.com.br', baseUrl: 'https://www.fidelisleiloes.com.br', catalogType: '3' },
+  { site: 'gilsonleiloes', host: 'gilsonleiloes.com.br', baseUrl: 'https://www.gilsonleiloes.com.br', catalogType: '3' },
+  { site: 'jdleiloes', host: 'jdleiloes.com.br', baseUrl: 'https://www.jdleiloes.com.br', catalogType: '3' },
+  { site: 'mariafixerleiloes', host: 'mariafixerleiloes.com.br', baseUrl: 'https://www.mariafixerleiloes.com.br', catalogType: '3' },
 ] as const;
 
 type VlanceRealEstateDefinition = (typeof vlanceRealEstateDefinitions)[number];

@@ -42,5 +42,10 @@ export function integrationDefinitions(leiloApiUrl: string): IntegrationDefiniti
     { site: 'rosioliveiraleiloes', name: 'Rosi Oliveira Leilões', catalog: 'real_estate', publicUrl: 'https://rosioliveiraleiloes.com.br/', collectionUrl: 'https://rosioliveiraleiloes.com.br/core/api/get-lotes', scopes: ['Imóveis'] },
     { site: 'fidelisleiloes', name: 'Fidelis Leilões', catalog: 'real_estate', publicUrl: 'https://www.fidelisleiloes.com.br/', collectionUrl: 'https://www.fidelisleiloes.com.br/core/api/get-lotes', scopes: ['Imóveis'] },
     { site: 'milanleiloes', name: 'Milan Leilões', catalog: 'real_estate', publicUrl: 'https://milanleiloes.com.br/pesquisa/imoveis', collectionUrl: 'https://milanleiloes.com.br/pesquisa/imoveis', scopes: ['Imóveis'] },
+    { site: 'leiloeiropublico', name: 'Leiloeiro Público', catalog: 'real_estate', publicUrl: 'https://www.leiloeiropublico.com.br/', collectionUrl: 'https://www.leiloeiropublico.com.br/', scopes: ['Imóveis'] },
+    { site: 'satoleiloes', name: 'Sato Leilões', catalog: 'real_estate', publicUrl: 'https://satoleiloes.com.br/', collectionUrl: 'https://satoleiloes.com.br/', scopes: ['Imóveis'] },
+    { site: 'gilsonleiloes', name: 'Gilson Leilões', catalog: 'real_estate', publicUrl: 'https://www.gilsonleiloes.com.br/', collectionUrl: 'https://www.gilsonleiloes.com.br/leilao/index/imoveis', scopes: ['Imóveis'] },
+    { site: 'jdleiloes', name: 'JD Leilões', catalog: 'real_estate', publicUrl: 'https://www.jdleiloes.com.br/', collectionUrl: 'https://www.jdleiloes.com.br/leilao/index/imoveis', scopes: ['Imóveis'] },
+    { site: 'mariafixerleiloes', name: 'Maria Fixer Leilões', catalog: 'real_estate', publicUrl: 'https://www.mariafixerleiloes.com.br/', collectionUrl: 'https://www.mariafixerleiloes.com.br/leilao/index/imoveis', scopes: ['Imóveis'] },
   ];
 }

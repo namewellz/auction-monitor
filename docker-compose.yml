@@ -120,6 +120,10 @@ services:
       flaresolverr:
         condition: service_started
 
+    networks:
+      - default
+      - proxy
+
     restart: unless-stopped
 
 
@@ -205,3 +209,9 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock
 
     restart: unless-stopped
+
+
+networks:
+  proxy:
+    external: true
+    name: proxy

@@ -47,5 +47,14 @@ export function integrationDefinitions(leiloApiUrl: string): IntegrationDefiniti
     { site: 'gilsonleiloes', name: 'Gilson Leilões', catalog: 'real_estate', publicUrl: 'https://www.gilsonleiloes.com.br/', collectionUrl: 'https://www.gilsonleiloes.com.br/leilao/index/imoveis', scopes: ['Imóveis'] },
     { site: 'jdleiloes', name: 'JD Leilões', catalog: 'real_estate', publicUrl: 'https://www.jdleiloes.com.br/', collectionUrl: 'https://www.jdleiloes.com.br/leilao/index/imoveis', scopes: ['Imóveis'] },
     { site: 'mariafixerleiloes', name: 'Maria Fixer Leilões', catalog: 'real_estate', publicUrl: 'https://www.mariafixerleiloes.com.br/', collectionUrl: 'https://www.mariafixerleiloes.com.br/leilao/index/imoveis', scopes: ['Imóveis'] },
+    { site: 'insigneleiloes', name: 'Insigne Leilões', catalog: 'real_estate', publicUrl: 'https://www.insigneleiloes.com.br/', collectionUrl: 'https://www.insigneleiloes.com.br/ApiEngine/GetLotes/1/24', scopes: ['Imóveis'] },
+    { site: 'planaltoleiloes', name: 'Planalto Leilões', catalog: 'real_estate', publicUrl: 'https://planaltoleiloes.com.br/', collectionUrl: 'https://planaltoleiloes.com.br/core/api/get-lotes', scopes: ['Imóveis'] },
+    { site: 'fabiobarbosaleiloes', name: 'Fábio Barbosa Leilões', catalog: 'real_estate', publicUrl: 'https://www.fabiobarbosaleiloes.com.br/', collectionUrl: 'https://www.fabiobarbosaleiloes.com.br/core/api/get-lotes', scopes: ['Imóveis'] },
+    { site: 'verdeamareloleiloes', name: 'Verde Amarelo Leilões', catalog: 'real_estate', publicUrl: 'https://www.verdeamareloleiloes.com.br/', collectionUrl: 'https://www.verdeamareloleiloes.com.br/core/api/get-lotes', scopes: ['Imóveis'] },
+    { site: 'leiloeszanoni', name: 'Leilões Zanoni', catalog: 'real_estate', publicUrl: 'https://www.leiloeszanoni.com.br/', collectionUrl: 'https://www.leiloeszanoni.com.br/core/api/get-lotes', scopes: ['Imóveis'] },
+    { site: 'leiloescentrooeste', name: 'Leilões Centro-Oeste', catalog: 'real_estate', publicUrl: 'https://www.leiloescentrooeste.com.br/', collectionUrl: 'https://www.leiloescentrooeste.com.br/core/api/get-lotes', scopes: ['Imóveis'] },
+    { site: 'diasleiloes', name: 'Dias Leilões', catalog: 'real_estate', publicUrl: 'https://www.diasleiloes.com.br/', collectionUrl: 'https://www.diasleiloes.com.br/core/api/get-lotes', scopes: ['Imóveis'] },
+    { site: 'matogrossoleiloes', name: 'Mato Grosso Leilões', catalog: 'real_estate', publicUrl: 'https://www.matogrossoleiloes.com.br/', collectionUrl: 'https://www.matogrossoleiloes.com.br/core/api/get-lotes', scopes: ['Imóveis'] },
+    { site: 'verrileiloes', name: 'Verri Leilões', catalog: 'real_estate', publicUrl: 'https://www.verrileiloes.com.br/', collectionUrl: 'https://www.verrileiloes.com.br/core/api/get-lotes', scopes: ['Imóveis'] },
   ];
 }

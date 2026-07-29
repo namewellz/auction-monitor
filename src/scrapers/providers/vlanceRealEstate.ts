@@ -31,6 +31,14 @@ export const vlanceRealEstateDefinitions = [
   { site: 'gilsonleiloes', host: 'gilsonleiloes.com.br', baseUrl: 'https://www.gilsonleiloes.com.br', catalogType: '3' },
   { site: 'jdleiloes', host: 'jdleiloes.com.br', baseUrl: 'https://www.jdleiloes.com.br', catalogType: '3' },
   { site: 'mariafixerleiloes', host: 'mariafixerleiloes.com.br', baseUrl: 'https://www.mariafixerleiloes.com.br', catalogType: '3' },
+  { site: 'verdeamareloleiloes', host: 'verdeamareloleiloes.com.br', baseUrl: 'https://www.verdeamareloleiloes.com.br', catalogType: '3' },
+  { site: 'fabiobarbosaleiloes', host: 'fabiobarbosaleiloes.com.br', baseUrl: 'https://www.fabiobarbosaleiloes.com.br', catalogType: '3' },
+  { site: 'leiloeszanoni', host: 'leiloeszanoni.com.br', baseUrl: 'https://www.leiloeszanoni.com.br', catalogType: '3' },
+  { site: 'planaltoleiloes', host: 'planaltoleiloes.com.br', baseUrl: 'https://planaltoleiloes.com.br', catalogType: '3' },
+  { site: 'leiloescentrooeste', host: 'leiloescentrooeste.com.br', baseUrl: 'https://www.leiloescentrooeste.com.br', catalogType: '3' },
+  { site: 'diasleiloes', host: 'diasleiloes.com.br', baseUrl: 'https://www.diasleiloes.com.br', catalogType: '3' },
+  { site: 'matogrossoleiloes', host: 'matogrossoleiloes.com.br', baseUrl: 'https://www.matogrossoleiloes.com.br', catalogType: '3' },
+  { site: 'verrileiloes', host: 'verrileiloes.com.br', baseUrl: 'https://www.verrileiloes.com.br', catalogType: '3' },
 ] as const;
 
 type VlanceRealEstateDefinition = (typeof vlanceRealEstateDefinitions)[number];

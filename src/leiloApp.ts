@@ -42,6 +42,14 @@ import {
   GilsonRealEstateCatalogProvider,
   JdRealEstateCatalogProvider,
   MariaFixerRealEstateCatalogProvider,
+  VerdeAmareloRealEstateCatalogProvider,
+  FabioBarbosaRealEstateCatalogProvider,
+  ZanoniRealEstateCatalogProvider,
+  PlanaltoRealEstateCatalogProvider,
+  CentroOesteRealEstateCatalogProvider,
+  DiasRealEstateCatalogProvider,
+  MatoGrossoRealEstateCatalogProvider,
+  VerriRealEstateCatalogProvider,
 } from './scrapers/providers/leiloesJudiciaisRealEstateCatalog.js';
 import {
   SuporteLeiloesRealEstateCatalogProvider,
@@ -52,6 +60,7 @@ import { SatoRealEstateCatalogProvider } from './scrapers/providers/satoRealEsta
 import { LeiloeiroPublicoRealEstateCatalogProvider } from './scrapers/providers/leiloeiroPublicoRealEstateCatalog.js';
 import { integrationDefinitions } from './integrations.js';
 import { CatalogCollectionScheduler } from './scheduler/catalogCollection.js';
+import { InsigneRealEstateCatalogProvider } from './scrapers/providers/insigneRealEstateCatalog.js';
 
 const logger = new Logger(config.logLevel);
 const pool = createPostgresPool(config.postgresUrl);
@@ -115,6 +124,15 @@ const bulkCollector = new CatalogCollectionService(
     new GilsonRealEstateCatalogProvider(config.vlanceRequestIntervalMs),
     new JdRealEstateCatalogProvider(config.vlanceRequestIntervalMs),
     new MariaFixerRealEstateCatalogProvider(config.vlanceRequestIntervalMs),
+    new VerdeAmareloRealEstateCatalogProvider(config.vlanceRequestIntervalMs),
+    new FabioBarbosaRealEstateCatalogProvider(config.vlanceRequestIntervalMs),
+    new ZanoniRealEstateCatalogProvider(config.vlanceRequestIntervalMs),
+    new PlanaltoRealEstateCatalogProvider(config.vlanceRequestIntervalMs),
+    new CentroOesteRealEstateCatalogProvider(config.vlanceRequestIntervalMs),
+    new DiasRealEstateCatalogProvider(config.vlanceRequestIntervalMs),
+    new MatoGrossoRealEstateCatalogProvider(config.vlanceRequestIntervalMs),
+    new VerriRealEstateCatalogProvider(config.vlanceRequestIntervalMs),
+    new InsigneRealEstateCatalogProvider(config.vlanceRequestIntervalMs),
     new LeiloeiroPublicoRealEstateCatalogProvider(config.vlanceRequestIntervalMs),
     new SatoRealEstateCatalogProvider(config.vlanceRequestIntervalMs),
     ...suporteLeiloesDefinitions.map((definition) =>

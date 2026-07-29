@@ -1,6 +1,6 @@
 # Backlog de integrações de leilões de imóveis
 
-Última revisão: 24/07/2026
+Última revisão: 29/07/2026
 
 Este arquivo é a fonte de acompanhamento dos sites de imóveis que devem entrar no Auction Data.
 A lista recebida continha 85 ocorrências, sendo 43 domínios únicos após remover duplicidades e
@@ -9,8 +9,8 @@ parâmetros de rastreamento (`utm_*`).
 ## Resumo
 
 - Total da lista: **43 sites**
-- Integrados no código: **34**
-- Pendentes: **9**
+- Integrados no código: **43**
+- Pendentes: **0**
 - Integração existente fora da lista: **1** (Franco Leilões)
 
 ## Critério para considerar uma integração concluída
@@ -70,18 +70,26 @@ mais recentes estão validadas localmente e aguardam publicação.
 - [x] **JD Leilões** — `jdleiloes.com.br` — plataforma VLance; 10 imóveis ativos.
 - [x] **Maria Fixer Leilões** — `mariafixerleiloes.com.br` — plataforma VLance;
   13 imóveis ativos.
+- [x] **Insigne Leilões** — `insigneleiloes.com.br` — plataforma Degrau; 74 anúncios
+  identificados, com catálogo, detalhe, imagens e revalidação.
+- [x] **Planalto Leilões** — `planaltoleiloes.com.br` — plataforma VLance; 5 imóveis
+  válidos (mais 5 anúncios de teste descartados).
+- [x] **Fábio Barbosa Leilões** — `fabiobarbosaleiloes.com.br` — plataforma VLance;
+  4 imóveis válidos (mais 5 simulações descartadas).
+- [x] **Verde Amarelo Leilões** — `verdeamareloleiloes.com.br` — plataforma VLance;
+  5 imóveis válidos.
+- [x] **Leilões Zanoni** — `leiloeszanoni.com.br` — plataforma VLance; 3 imóveis válidos.
+- [x] **Leilões Centro-Oeste** — `leiloescentrooeste.com.br` — plataforma VLance;
+  2 imóveis válidos.
+- [x] **Dias Leilões** — `diasleiloes.com.br` — plataforma VLance; integração pronta,
+  embora o catálogo atual contenha somente anúncios de teste, que são descartados.
+- [x] **Mato Grosso Leilões** — `matogrossoleiloes.com.br` — plataforma VLance;
+  1 imóvel válido (mais 5 anúncios de teste descartados).
+- [x] **Verri Leilões** — `verrileiloes.com.br` — plataforma VLance; 3 imóveis válidos.
 
 ## Pendentes
 
-- [ ] **Dias Leilões** — https://www.diasleiloes.com.br/
-- [ ] **Fábio Barbosa Leilões** — https://www.fabiobarbosaleiloes.com.br/
-- [ ] **Insigne Leilões** — https://www.insigneleiloes.com.br/
-- [ ] **Leilões Centro-Oeste** — https://www.leiloescentrooeste.com.br/
-- [ ] **Leilões Zanoni** — https://www.leiloeszanoni.com.br/
-- [ ] **Mato Grosso Leilões** — https://www.matogrossoleiloes.com.br/
-- [ ] **Planalto Leilões** — https://www.planaltoleiloes.com.br/externo/
-- [ ] **Verde Amarelo Leilões** — https://www.verdeamareloleiloes.com.br/
-- [ ] **Verri Leilões** — https://www.verrileiloes.com.br/
+Nenhum site pendente na lista original.
 
 ## Integrações existentes fora da lista recebida
 

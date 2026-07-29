@@ -189,3 +189,83 @@ export class MariaFixerRealEstateCatalogProvider extends AlessandroTeixeiraRealE
     });
   }
 }
+
+export class VerdeAmareloRealEstateCatalogProvider extends AlessandroTeixeiraRealEstateCatalogProvider {
+  public constructor(requestIntervalMs = 750) {
+    super(requestIntervalMs, {
+      site: 'verdeamareloleiloes',
+      baseUrl: 'https://www.verdeamareloleiloes.com.br',
+      catalogType: '3',
+    });
+  }
+}
+
+export class FabioBarbosaRealEstateCatalogProvider extends AlessandroTeixeiraRealEstateCatalogProvider {
+  public constructor(requestIntervalMs = 750) {
+    super(requestIntervalMs, {
+      site: 'fabiobarbosaleiloes',
+      baseUrl: 'https://www.fabiobarbosaleiloes.com.br',
+      catalogType: '3',
+    });
+  }
+}
+
+export class ZanoniRealEstateCatalogProvider extends AlessandroTeixeiraRealEstateCatalogProvider {
+  public constructor(requestIntervalMs = 750) {
+    super(requestIntervalMs, {
+      site: 'leiloeszanoni',
+      baseUrl: 'https://www.leiloeszanoni.com.br',
+      catalogType: '3',
+    });
+  }
+}
+
+export class PlanaltoRealEstateCatalogProvider extends AlessandroTeixeiraRealEstateCatalogProvider {
+  public constructor(requestIntervalMs = 750) {
+    super(requestIntervalMs, {
+      site: 'planaltoleiloes',
+      baseUrl: 'https://planaltoleiloes.com.br',
+      catalogType: '3',
+    });
+  }
+}
+
+export class CentroOesteRealEstateCatalogProvider extends AlessandroTeixeiraRealEstateCatalogProvider {
+  public constructor(requestIntervalMs = 750) {
+    super(requestIntervalMs, {
+      site: 'leiloescentrooeste',
+      baseUrl: 'https://www.leiloescentrooeste.com.br',
+      catalogType: '3',
+    });
+  }
+}
+
+export class DiasRealEstateCatalogProvider extends AlessandroTeixeiraRealEstateCatalogProvider {
+  public constructor(requestIntervalMs = 750) {
+    super(requestIntervalMs, {
+      site: 'diasleiloes',
+      baseUrl: 'https://www.diasleiloes.com.br',
+      catalogType: '3',
+    });
+  }
+}
+
+export class MatoGrossoRealEstateCatalogProvider extends AlessandroTeixeiraRealEstateCatalogProvider {
+  public constructor(requestIntervalMs = 750) {
+    super(requestIntervalMs, {
+      site: 'matogrossoleiloes',
+      baseUrl: 'https://www.matogrossoleiloes.com.br',
+      catalogType: '3',
+    });
+  }
+}
+
+export class VerriRealEstateCatalogProvider extends AlessandroTeixeiraRealEstateCatalogProvider {
+  public constructor(requestIntervalMs = 750) {
+    super(requestIntervalMs, {
+      site: 'verrileiloes',
+      baseUrl: 'https://www.verrileiloes.com.br',
+      catalogType: '3',
+    });
+  }
+}

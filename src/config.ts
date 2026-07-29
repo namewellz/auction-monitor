@@ -18,7 +18,10 @@ export interface AppConfig {
   dashboardPort: number;
   leiloApiUrl: string;
   leiloMaxPages: number;
+  catalogCollectionMode: 'continuous' | 'cron';
   catalogCollectionCron: string;
+  catalogCollectionIdleMs: number;
+  catalogCollectionErrorBackoffMs: number;
   catalogCollectOnStart: boolean;
   catalogMaxPages: number;
   vipRequestIntervalMs: number;
@@ -95,6 +98,10 @@ function parseLogLevel(value: string | undefined): AppConfig['logLevel'] {
   return 'info';
 }
 
+function parseCatalogCollectionMode(value: string | undefined): AppConfig['catalogCollectionMode'] {
+  return value?.trim().toLowerCase() === 'cron' ? 'cron' : 'continuous';
+}
+
 export const config: AppConfig = {
   telegramBotToken: process.env.TELEGRAM_BOT_TOKEN,
   allowedChatIds: parseNumberSet(process.env.TELEGRAM_ALLOWED_CHAT_IDS),
@@ -113,9 +120,15 @@ export const config: AppConfig = {
   dashboardPort: parsePositiveInt(process.env.DASHBOARD_PORT, 3000),
   leiloApiUrl: process.env.LEILO_API_URL ?? 'https://api.leilo.com.br/v1/lote/busca-elastic',
   leiloMaxPages: parsePositiveInt(process.env.LEILO_MAX_PAGES, 20),
+  catalogCollectionMode: parseCatalogCollectionMode(process.env.CATALOG_COLLECTION_MODE),
   catalogCollectionCron: process.env.CATALOG_COLLECTION_CRON
     ?? process.env.LEILO_COLLECTION_CRON
     ?? '0 */6 * * *',
+  catalogCollectionIdleMs: parsePositiveInt(process.env.CATALOG_COLLECTION_IDLE_MS, 60_000),
+  catalogCollectionErrorBackoffMs: parsePositiveInt(
+    process.env.CATALOG_COLLECTION_ERROR_BACKOFF_MS,
+    300_000,
+  ),
   catalogCollectOnStart: parseBoolean(process.env.CATALOG_COLLECT_ON_START, false),
   catalogMaxPages: parsePositiveInt(process.env.CATALOG_MAX_PAGES, 60),
   vipRequestIntervalMs: parsePositiveInt(process.env.VIP_REQUEST_INTERVAL_MS, 750),

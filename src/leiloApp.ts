@@ -1,4 +1,3 @@
-import cron from 'node-cron';
 import { config } from './config.js';
 import { DashboardRepository } from './database/dashboardRepository.js';
 import { HistoricalRepository } from './database/historicalRepository.js';
@@ -52,6 +51,7 @@ import { MilanPageClient, MilanRealEstateCatalogProvider } from './scrapers/prov
 import { SatoRealEstateCatalogProvider } from './scrapers/providers/satoRealEstateCatalog.js';
 import { LeiloeiroPublicoRealEstateCatalogProvider } from './scrapers/providers/leiloeiroPublicoRealEstateCatalog.js';
 import { integrationDefinitions } from './integrations.js';
+import { CatalogCollectionScheduler } from './scheduler/catalogCollection.js';
 
 const logger = new Logger(config.logLevel);
 const pool = createPostgresPool(config.postgresUrl);
@@ -166,14 +166,24 @@ void Promise.all([
 ]).catch((error) => logger.warn('Dashboard cache warmup failed', {
   error: error instanceof Error ? error.message : String(error),
 }));
-cron.schedule(config.catalogCollectionCron, () => {
-  void bulkCollector.collectAll().finally(() => dashboardRepository.invalidateCaches());
-});
+const catalogScheduler = new CatalogCollectionScheduler(
+  bulkCollector,
+  logger,
+  () => dashboardRepository.invalidateCaches(),
+  {
+    mode: config.catalogCollectionMode,
+    cronExpression: config.catalogCollectionCron,
+    idleMs: config.catalogCollectionIdleMs,
+    errorBackoffMs: config.catalogCollectionErrorBackoffMs,
+    collectOnStart: config.catalogCollectOnStart,
+  },
+);
+catalogScheduler.start();
 historicalScheduler.start();
-if (config.catalogCollectOnStart) void bulkCollector.collectAll('leilo');
 
 async function shutdown(signal: string): Promise<void> {
   logger.info('Leilo dashboard shutting down', { signal });
+  catalogScheduler.stop();
   await historicalScheduler.stop();
   await pool.end();
   process.exit(0);

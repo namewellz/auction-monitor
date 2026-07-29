@@ -43,6 +43,13 @@ Os dados ficam nos volumes `postgres-data` e `minio-data`. O console do MinIO fi
 `http://localhost:9001` (usuario `auctionadmin`, senha `auctionsecret` no ambiente local).
 
 O painel inicia uma coleta automaticamente e permite disparar novas coletas pelo botao `Atualizar coleta`.
+Por padrao, a coleta funciona em modo continuo: ao concluir uma varredura completa, aguarda
+`CATALOG_COLLECTION_IDLE_MS` (60 segundos por padrao) e inicia o ciclo seguinte. Falhas
+aplicam o intervalo maior de `CATALOG_COLLECTION_ERROR_BACKOFF_MS` (cinco minutos por
+padrao). Nao ha sobreposicao entre ciclos.
+
+Para restaurar o agendamento tradicional, configure `CATALOG_COLLECTION_MODE=cron` e
+informe a expressao em `CATALOG_COLLECTION_CRON`.
 
 ## Deploy automatico no Portainer Community
 

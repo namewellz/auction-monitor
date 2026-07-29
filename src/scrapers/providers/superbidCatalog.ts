@@ -1,6 +1,7 @@
 import * as cheerio from 'cheerio';
 import type { CatalogPage, CatalogProvider } from '../base/catalogProvider.js';
 import type { LotData } from '../../types/lot.js';
+import { resolveSuperbidStatus } from './superbidStatus.js';
 
 const API_URL = 'https://offer-query.superbid.net/seo/offers/';
 const CATEGORY_URL = 'https://www.superbid.net/categorias/carros-motos';
@@ -9,7 +10,7 @@ interface SuperbidOffer {
   id: number; lotNumber?: number; endDateTime?: number; endDate?: string; price?: number;
   statusId?: number; totalBids?: number; offerStatus?: Record<string, boolean>;
   stores?: Array<{ name?: string }>;
-  offerDetail?: { currentMinBid?: number; initialBidValue?: number };
+  offerDetail?: { currentMinBid?: number; initialBidValue?: number; reservedPrice?: number };
   currentBidIncrement?: { currentBidIncrement?: number };
   auction?: { id?: number; desc?: string; beginDate?: string };
   groupOffer?: { commissionPercent?: number };
@@ -99,6 +100,7 @@ function mapOffer(offer: SuperbidOffer): LotData {
   const videoUrl = (product.galleryJson ?? []).find((item) => item.type === 'video')?.link;
   const auctionEnd = offer.endDateTime ? new Date(offer.endDateTime) : parseDate(offer.endDate);
   const auctionStart = parseDate(offer.auction?.beginDate);
+  const resolvedStatus = resolveSuperbidStatus(offer);
   if (!auctionEnd || Number.isNaN(auctionEnd.getTime())) throw new Error(`Superbid offer ${offer.id} has no valid end date`);
 
   return {
@@ -113,7 +115,8 @@ function mapOffer(offer: SuperbidOffer): LotData {
     ...(manufactureYear ? { manufactureYear } : {}), ...(modelYear ? { modelYear } : {}),
     ...(mileage ? { mileage } : {}),
     ...(offer.seller?.name ?? offer.stores?.at(-1)?.name ? { consignor: clean(offer.seller?.name ?? offer.stores?.at(-1)?.name ?? '') } : {}),
-    saleStatus: status(offer), displayStatus: status(offer), classification: 'Carros', assetType: 'car',
+    saleStatus: resolvedStatus.saleStatus, displayStatus: resolvedStatus.displayStatus,
+    classification: 'Carros', assetType: 'car',
     bidCount: offer.totalBids ?? 0,
     ...(value(details, ['cor']) ? { color: value(details, ['cor']) } : {}),
     ...(value(details, ['combustivel']) ? { fuel: value(details, ['combustivel']) } : {}),
@@ -203,7 +206,6 @@ function value(values: Map<string, string>, aliases: string[]): string {
 }
 function customRestrictions(json: string | undefined): string { try { const value = JSON.parse(json ?? '{}') as { vehicleRestrictions?: string }; return clean(value.vehicleRestrictions ?? ''); } catch { return ''; } }
 function explicitRunning(motor: string): boolean | undefined { const value = normalize(motor); if (/nao funciona|inoperante/.test(value)) return false; if (/funcionando|operacional/.test(value)) return true; return undefined; }
-function status(offer: SuperbidOffer): string { if (offer.offerStatus?.sold) return 'sold'; if (offer.offerStatus?.closed) return 'closed'; if (offer.offerStatus?.giveYourBid) return 'open'; return String(offer.statusId ?? 'unknown'); }
 function offerUrl(offer: SuperbidOffer): string { return `https://exchange.superbid.net/oferta/${slug(offer.product?.shortDesc ?? 'oferta')}-${offer.id}`; }
 function slug(value: string): string { return normalize(value).replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, ''); }
 function clean(value: string): string { return value.replace(/\s+/g, ' ').trim(); }

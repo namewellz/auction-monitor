@@ -303,22 +303,25 @@ export async function runPostgresMigrations(pool: Pool): Promise<void> {
     RETURNS TEXT LANGUAGE sql STABLE AS $function$
       SELECT CASE
         WHEN lot.sale_result='CONDITIONAL_REJECTED'
-          OR lot.sale_status IN ('CondicionalNegada','NegadaCondicional','CondicionalRecusada')
+          OR lot.sale_status IN ('CondicionalNegada','NegadaCondicional','CondicionalRecusada','7')
           THEN 'conditional_rejected'
-        WHEN lot.sale_result='CONDITIONAL_PENDING' OR lot.sale_status='Condicional'
+        WHEN lot.sale_result='CONDITIONAL_PENDING'
+          OR lot.sale_status IN ('Condicional','reserved','11')
           THEN 'conditional_pending'
         WHEN lot.sale_result='SOLD'
-          OR lot.sale_status IN ('AgPagamento','Pago','Vendido','Arrematado','VendidoPorCompreJa')
+          OR lot.sale_status IN ('AgPagamento','Pago','Vendido','Arrematado','VendidoPorCompreJa','sold','3')
           THEN CASE WHEN EXISTS (
             SELECT 1 FROM lot_snapshots history
             WHERE history.market_lot_id=lot.id
               AND (history.sale_status='Condicional'
                 OR history.raw_data_json::jsonb->>'saleResult'='CONDITIONAL_PENDING')
           ) THEN 'conditional_approved' ELSE 'sold' END
-        WHEN lot.sale_result='UNSOLD' OR lot.sale_status IN ('NaoArrematado','SemLance') THEN 'unsold'
-        WHEN lot.sale_result='WITHDRAWN' OR lot.sale_status IN ('Retirado','Cancelado','Suspenso') THEN 'withdrawn'
+        WHEN lot.sale_result='UNSOLD'
+          OR lot.sale_status IN ('NaoArrematado','SemLance','closed','6') THEN 'unsold'
+        WHEN lot.sale_result='WITHDRAWN'
+          OR lot.sale_status IN ('Retirado','Cancelado','Suspenso','removed','stabbed') THEN 'withdrawn'
         WHEN lot.sale_phase='OPEN'
-          OR lot.sale_status IN ('LiberadoLeilao','AbertoParaOfertas','DoulheUma','DoulheDuas','EmDisputa')
+          OR lot.sale_status IN ('LiberadoLeilao','AbertoParaOfertas','DoulheUma','DoulheDuas','EmDisputa','open','1')
           THEN 'open'
         ELSE 'other'
       END

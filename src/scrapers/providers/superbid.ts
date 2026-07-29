@@ -4,6 +4,7 @@ import { fetchHtml } from '../base/cycleTlsClient.js';
 import type { LotData } from '../../types/lot.js';
 import { hostMatches } from '../../utils/url.js';
 import { TerminalLotUnavailableError } from '../../errors/terminalLotUnavailableError.js';
+import { resolveSuperbidStatus } from './superbidStatus.js';
 
 interface SuperbidNextData {
   props?: {
@@ -25,13 +26,20 @@ interface SuperbidOffer {
   offerStatus?: {
     sold?: boolean;
     closed?: boolean;
+    closedToBids?: boolean;
+    wantToKnowThePrice?: boolean;
+    removed?: boolean;
+    stabbed?: boolean;
+    subjudice?: boolean;
     reserved?: boolean;
     giveYourBid?: boolean;
   };
   stores?: Array<{ name?: string }>;
   offerDetail?: {
     currentMinBid?: number;
+    reservedPrice?: number;
   };
+  totalBids?: number;
   currentBidIncrement?: {
     currentBidIncrement?: number;
   };
@@ -92,7 +100,7 @@ export class SuperbidScraper implements AuctionScraper {
       currentBid === undefined || commissionPercent === undefined
         ? undefined
         : currentBid * (commissionPercent / 100);
-    const saleStatus = superbidStatus(offer);
+    const resolvedStatus = resolveSuperbidStatus(offer);
     const consignor = offer.stores?.at(-1)?.name;
 
     if (!title || currentBid === undefined || nextBid === undefined || !auctionEnd) {
@@ -114,8 +122,9 @@ export class SuperbidScraper implements AuctionScraper {
       ...(localRef ? { origin: `Referencia Local: ${localRef}` } : {}),
       ...vehicleFromTitle(title),
       ...(consignor ? { consignor } : {}),
-      ...(saleStatus ? { saleStatus } : {}),
-      ...(hasEnded ? { finalBid: currentBid } : {}),
+      saleStatus: resolvedStatus.saleStatus,
+      displayStatus: resolvedStatus.displayStatus,
+      ...(hasEnded && resolvedStatus.terminal ? { finalBid: currentBid } : {}),
       ...(commissionFee !== undefined ? { commissionFee, totalCost: currentBid + commissionFee } : {}),
       ...(offer.auction?.desc ? { eventName: offer.auction.desc } : {}),
       ...(offer.auction?.id !== undefined ? { eventExternalCode: String(offer.auction.id) } : {}),
@@ -136,14 +145,6 @@ async function assertOfferIsAvailable(url: string): Promise<void> {
   if (response.status === 404 || (response.status >= 300 && response.status < 400 && /(?:^|\/)404(?:[/?#]|$)/i.test(location))) {
     throw new TerminalLotUnavailableError('Superbid offer was removed from the source catalog');
   }
-}
-
-function superbidStatus(offer: SuperbidOffer): string | undefined {
-  if (offer.offerStatus?.sold) return 'sold';
-  if (offer.offerStatus?.reserved) return 'reserved';
-  if (offer.offerStatus?.closed) return 'closed';
-  if (offer.offerStatus?.giveYourBid) return 'open';
-  return offer.statusId === undefined ? undefined : String(offer.statusId);
 }
 
 function vehicleFromTitle(title: string): Partial<LotData> {

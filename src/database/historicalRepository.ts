@@ -135,7 +135,10 @@ export class HistoricalRepository {
           auction_start=EXCLUDED.auction_start, auction_end=EXCLUDED.auction_end, sold_at=EXCLUDED.sold_at,
           last_seen_at=EXCLUDED.last_seen_at, last_checked_at=EXCLUDED.last_checked_at,
           next_check_at=EXCLUDED.next_check_at, recheck_count=market_lots.recheck_count+1,
-          finalized_at=COALESCE(EXCLUDED.finalized_at, market_lots.finalized_at),
+          finalized_at=CASE
+            WHEN market_lots.sale_status='unavailable' AND EXCLUDED.finalized_at IS NULL THEN NULL
+            ELSE COALESCE(EXCLUDED.finalized_at, market_lots.finalized_at)
+          END,
           classification=COALESCE(EXCLUDED.classification,market_lots.classification),
           source_announcement_id=EXCLUDED.source_announcement_id,
           display_status=EXCLUDED.display_status, sale_phase=EXCLUDED.sale_phase,

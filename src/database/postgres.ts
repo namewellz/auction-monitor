@@ -319,7 +319,8 @@ export async function runPostgresMigrations(pool: Pool): Promise<void> {
         WHEN lot.sale_result='UNSOLD'
           OR lot.sale_status IN ('NaoArrematado','SemLance','closed','6') THEN 'unsold'
         WHEN lot.sale_result='WITHDRAWN'
-          OR lot.sale_status IN ('Retirado','Cancelado','Suspenso','removed','stabbed') THEN 'withdrawn'
+          OR lot.sale_status IN ('Retirado','Cancelado','Suspenso','removed','stabbed','unavailable')
+          THEN 'withdrawn'
         WHEN lot.sale_phase='OPEN'
           OR lot.sale_status IN ('LiberadoLeilao','AbertoParaOfertas','DoulheUma','DoulheDuas','EmDisputa','open','1')
           THEN 'open'
@@ -356,6 +357,22 @@ export async function runPostgresMigrations(pool: Pool): Promise<void> {
 
     UPDATE market_lots lot SET canonical_status=calculate_canonical_lot_status(lot)
     WHERE canonical_status IS DISTINCT FROM calculate_canonical_lot_status(lot);
+
+    UPDATE market_lots SET
+      finalized_at=NULL,
+      next_check_at=NOW(),
+      recheck_count=0,
+      revalidation_started_at=NULL,
+      revalidation_due_at=NULL,
+      revalidation_finished_at=NULL,
+      revalidation_error=NULL,
+      consecutive_failures=0,
+      sale_status=CASE WHEN auction_end>NOW() THEN 'LiberadoLeilao' ELSE sale_status END,
+      display_status=CASE
+        WHEN auction_end>NOW() THEN 'Aberto para lances'
+        ELSE 'Aguardando nova consulta na origem'
+      END
+    WHERE site='superbid' AND sale_status='unavailable';
 
     CREATE TABLE IF NOT EXISTS real_estate_details (
       market_lot_id BIGINT PRIMARY KEY REFERENCES market_lots(id) ON DELETE CASCADE,

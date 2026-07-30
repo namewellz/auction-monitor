@@ -35,6 +35,7 @@ export interface AppConfig {
   vlanceRequestIntervalMs: number;
   milanRequestIntervalMs: number;
   milanFlareSolverrUrl: string | undefined;
+  megaRequestIntervalMs: number;
   superbidRequestIntervalMs: number;
   superbidCatalogPageSize: number;
   superbidCatalogMaxOffers: number;
@@ -142,6 +143,7 @@ export const config: AppConfig = {
   vlanceRequestIntervalMs: parsePositiveInt(process.env.VLANCE_REQUEST_INTERVAL_MS, 750),
   milanRequestIntervalMs: parsePositiveInt(process.env.MILAN_REQUEST_INTERVAL_MS, 750),
   milanFlareSolverrUrl: process.env.MILAN_FLARESOLVERR_URL?.trim() || undefined,
+  megaRequestIntervalMs: parsePositiveInt(process.env.MEGA_REQUEST_INTERVAL_MS, 750),
   superbidRequestIntervalMs: parsePositiveInt(process.env.SUPERBID_REQUEST_INTERVAL_MS, 750),
   superbidCatalogPageSize: parsePositiveInt(process.env.SUPERBID_CATALOG_PAGE_SIZE, 100),
   superbidCatalogMaxOffers: Number.isInteger(Number(process.env.SUPERBID_CATALOG_MAX_OFFERS))

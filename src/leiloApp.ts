@@ -61,6 +61,7 @@ import { LeiloeiroPublicoRealEstateCatalogProvider } from './scrapers/providers/
 import { integrationDefinitions } from './integrations.js';
 import { CatalogCollectionScheduler } from './scheduler/catalogCollection.js';
 import { InsigneRealEstateCatalogProvider } from './scrapers/providers/insigneRealEstateCatalog.js';
+import { MegaRealEstateCatalogProvider } from './scrapers/providers/megaRealEstateCatalog.js';
 
 const logger = new Logger(config.logLevel);
 const pool = createPostgresPool(config.postgresUrl);
@@ -141,6 +142,7 @@ const bulkCollector = new CatalogCollectionService(
       config.milanRequestIntervalMs,
       new MilanPageClient(config.milanFlareSolverrUrl),
     ),
+    new MegaRealEstateCatalogProvider(config.megaRequestIntervalMs),
     new SuperbidCatalogProvider(config.superbidCatalogPageSize, config.superbidRequestIntervalMs,
       config.superbidCatalogMaxOffers),
   ],

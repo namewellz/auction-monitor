@@ -1,6 +1,7 @@
 import * as cheerio from 'cheerio';
 import type { CatalogPage, CatalogProvider } from '../base/catalogProvider.js';
 import type { LotData } from '../../types/lot.js';
+import { TerminalLotUnavailableError } from '../../errors/terminalLotUnavailableError.js';
 
 const BASE_URL = 'https://www.calilleiloes.com.br';
 const SOURCE_URL = `${BASE_URL}/lotes/imovel`;
@@ -21,8 +22,12 @@ export class CalilRealEstateCatalogProvider implements CatalogProvider {
       .map((_, element) => absolute($(element).attr('href') ?? '')).get());
     const lots = [];
     for (const detailUrl of detailUrls) {
-      const data = await this.scrapeLot(detailUrl);
-      lots.push({ url: detailUrl, data, classification: 'Imóveis', assetType: 'real_estate' as const });
+      try {
+        const data = await this.scrapeLot(detailUrl);
+        lots.push({ url: detailUrl, data, classification: 'Imóveis', assetType: 'real_estate' as const });
+      } catch (error) {
+        if (!(error instanceof TerminalLotUnavailableError)) throw error;
+      }
       if (this.requestIntervalMs > 0) await sleep(this.requestIntervalMs);
     }
     const pageSize = Math.max(detailUrls.length, 1);
@@ -32,6 +37,9 @@ export class CalilRealEstateCatalogProvider implements CatalogProvider {
 
   public async scrapeLot(url: string): Promise<LotData> {
     const response = await fetch(url, { headers: headers(), signal: AbortSignal.timeout(30_000) });
+    if (response.status === 404 || response.status === 410) {
+      throw new TerminalLotUnavailableError(`Calil lot is no longer available (HTTP ${response.status})`);
+    }
     if (!response.ok) throw new Error(`Calil lot detail failed: HTTP ${response.status}`);
     const $ = cheerio.load(await response.text());
     const text = compact($('body').text());

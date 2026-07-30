@@ -51,10 +51,31 @@ export class CatalogCollectionService {
     const visited = new Set<string>();
 
     try {
-      for (const provider of selected) await this.collectProvider(provider, visited);
+      const providerErrors: string[] = [];
+      let completedProviders = 0;
+      for (const provider of selected) {
+        try {
+          await this.collectProvider(provider, visited);
+          completedProviders += 1;
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error);
+          providerErrors.push(`${provider.site}: ${message}`);
+          this.progress.failed += 1;
+          this.logger.warn('Catalog provider failed; collection will continue with the next origin', {
+            site: provider.site,
+            source: provider.source,
+            error: message,
+          });
+        }
+      }
+      const errorSummary = providerErrors.length ? providerErrors.join('\n') : undefined;
+      const runStatus = this.progress.failed > 0
+        ? completedProviders > 0 ? 'partial' : 'failed'
+        : 'completed';
       Object.assign(this.progress, {
         running: false,
         finishedAt: new Date().toISOString(),
+        ...(runStatus === 'failed' && errorSummary ? { lastError: errorSummary } : {}),
       });
       await this.repository.finishRun(runId, {
         discovered: this.progress.discovered,
@@ -63,8 +84,13 @@ export class CatalogCollectionService {
         new: this.progress.new,
         updated: this.progress.updated,
         unchanged: this.progress.unchanged,
+      }, errorSummary, runStatus);
+      this.logger.info('Catalog collection completed', {
+        ...this.progress,
+        status: runStatus,
+        completedProviders,
+        failedProviders: providerErrors.length,
       });
-      this.logger.info('Catalog collection completed', { ...this.progress });
       void this.mediaStorage.downloadPending().then((media) => {
         this.logger.info('Catalog media processed asynchronously', { ...media });
       }).catch((error: unknown) => {

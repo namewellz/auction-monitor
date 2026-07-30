@@ -297,11 +297,12 @@ export class HistoricalRepository {
     runId: number,
     result: { discovered: number; collected: number; failed: number; new: number; updated: number; unchanged: number },
     error?: string,
+    status?: 'completed' | 'partial' | 'failed',
   ): Promise<void> {
     await this.pool.query(
       `UPDATE collection_runs SET finished_at=NOW(),status=$1,discovered_count=$2,
        collected_count=$3,failed_count=$4,new_count=$5,updated_count=$6,unchanged_count=$7,error=$8 WHERE id=$9`,
-      [error ? 'failed' : 'completed', result.discovered, result.collected, result.failed,
+      [status ?? (error ? 'failed' : 'completed'), result.discovered, result.collected, result.failed,
         result.new, result.updated, result.unchanged, error ?? null, runId],
     );
   }

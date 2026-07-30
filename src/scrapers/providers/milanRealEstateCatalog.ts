@@ -308,7 +308,11 @@ export class MilanRealEstateCatalogProvider implements CatalogProvider {
         return await this.parseLotWithEvent(result, entry.eventDate);
       } catch (error) {
         lastError = error;
-        if (!(error instanceof TerminalLotUnavailableError) || attempt === 2) throw error;
+        if (!(error instanceof TerminalLotUnavailableError)) throw error;
+        if (attempt === 2) {
+          if (skipUnavailable) return undefined;
+          throw error;
+        }
         await sleep(500);
       }
     }

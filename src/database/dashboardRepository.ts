@@ -155,6 +155,10 @@ function canonicalStatusSql(lotAlias: string): string {
   return `${lotAlias}.canonical_status`;
 }
 
+function normalizedCitySql(lotAlias: string): string {
+  return `LOWER(BTRIM(${lotAlias}.city))`;
+}
+
 function buildLotWhere(filters: DashboardFilters, omittedFacet?: LotFacetKey): { where: string; params: unknown[] } {
   const conditions = ['1=1'];
   const params: unknown[] = [];
@@ -187,7 +191,10 @@ function buildLotWhere(filters: DashboardFilters, omittedFacet?: LotFacetKey): {
   addList('model', 'ml.model', filters.models);
   addList('year', 'ml.model_year', filters.years, 'int');
   addList('state', 'ml.state', filters.states);
-  addList('city', 'ml.city', filters.cities);
+  if (omittedFacet !== 'city' && filters.cities?.length) {
+    const cities = filters.cities.map((city) => city.trim().toLocaleLowerCase('pt-BR'));
+    conditions.push(`${normalizedCitySql('ml')} = ANY(${addParam(cities)}::text[])`);
+  }
   if (omittedFacet !== 'neighborhood' && filters.neighborhoods?.length) {
     conditions.push(`EXISTS (SELECT 1 FROM real_estate_details red WHERE red.market_lot_id=ml.id
       AND red.neighborhood_normalized = ANY(${addParam(filters.neighborhoods)}::text[]))`);
@@ -848,7 +855,14 @@ export class DashboardRepository {
       { key: 'model', value: 'ml.model', groupedValue: 'ml.model', limit: 1000 },
       { key: 'year', value: 'ml.model_year::text', groupedValue: 'ml.model_year::text', orderBy: 'value::int DESC' },
       { key: 'state', value: 'ml.state', groupedValue: 'ml.state' },
-      { key: 'city', value: 'ml.city', groupedValue: 'ml.city', limit: 500 },
+      {
+        key: 'city',
+        value: normalizedCitySql('ml'),
+        label: `INITCAP(${normalizedCitySql('ml')})`,
+        groupedValue: normalizedCitySql('ml'),
+        groupedLabel: `INITCAP(${normalizedCitySql('ml')})`,
+        limit: 500,
+      },
       { key: 'neighborhood', value: '(SELECT red.neighborhood_normalized FROM real_estate_details red WHERE red.market_lot_id=ml.id)',
         label: "(SELECT red.neighborhood FROM real_estate_details red WHERE red.market_lot_id=ml.id)",
         groupedValue: 'red.neighborhood_normalized', groupedLabel: 'red.neighborhood', limit: 1000 },

@@ -12,11 +12,16 @@ export class PortalZukRealEstateScraper implements AuctionScraper {
   }
 
   public supports(url: string): boolean {
-    return hostMatches(url, ['portalzuk.com.br'])
-      && /^\/imovel\/[a-z]{2}\/[^/]+\/[^/]+\/[^/]+\/\d+-\d+\/?$/i.test(new URL(url).pathname);
+    const parsed = new URL(url);
+    return (hostMatches(url, ['portalzuk.com.br'])
+      && /^\/imovel\/[a-z]{2}\/[^/]+\/[^/]+\/[^/]+\/\d+-\d+\/?$/i.test(parsed.pathname))
+      || (hostMatches(url, ['comprei.pgfn.gov.br'])
+        && /^\/anuncio\/detalhe\/\d+\/?$/i.test(parsed.pathname));
   }
 
   public scrape(url: string): Promise<LotData> {
-    return this.provider.scrapeLot(url);
+    return hostMatches(url, ['comprei.pgfn.gov.br'])
+      ? this.provider.scrapePartnerLot(url)
+      : this.provider.scrapeLot(url);
   }
 }

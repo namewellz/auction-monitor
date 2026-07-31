@@ -741,7 +741,7 @@ export class HistoricalRepository {
       `SELECT ml.id,ml.address,red.total_area_m2,red.private_area_m2,ml.raw_data_json
        FROM market_lots ml
        LEFT JOIN real_estate_details red ON red.market_lot_id=ml.id
-       WHERE ml.id<>$1 AND ml.asset_type='real_estate' AND ml.site<>'portalzuk'
+       WHERE ml.id<>$1 AND ml.asset_type='real_estate'
          AND LOWER(COALESCE(ml.state,''))=LOWER($2)
          AND LOWER(COALESCE(ml.city,''))=LOWER($3)
        ORDER BY ml.last_seen_at DESC LIMIT 750`,

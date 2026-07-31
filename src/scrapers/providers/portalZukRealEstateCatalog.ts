@@ -13,6 +13,11 @@ interface PortalPage {
   status: number;
 }
 
+interface PortalCatalogEntry {
+  url: string;
+  data?: LotData;
+}
+
 interface FlareResponse {
   status?: string;
   message?: string;
@@ -190,7 +195,7 @@ export class PortalZukClient {
 export class PortalZukRealEstateCatalogProvider implements CatalogProvider {
   public readonly site = 'portalzuk';
   public readonly source = CATALOG_URL;
-  private entriesPromise?: Promise<string[]>;
+  private entriesPromise?: Promise<PortalCatalogEntry[]>;
 
   public constructor(
     private readonly detailIntervalMs = 1_000,
@@ -203,18 +208,18 @@ export class PortalZukRealEstateCatalogProvider implements CatalogProvider {
     const start = (page - 1) * PAGE_SIZE;
     const selected = entries.slice(start, start + PAGE_SIZE);
     const lots = [];
-    for (const url of selected) {
+    for (const entry of selected) {
       try {
         lots.push({
-          url,
-          data: await this.scrapeLot(url),
-          classification: 'Imóveis',
+          url: entry.url,
+          data: entry.data ?? await this.scrapeLot(entry.url),
+          classification: entry.data?.classification ?? 'Imóveis',
           assetType: 'real_estate' as const,
         });
       } catch (error) {
         if (!(error instanceof TerminalLotUnavailableError)) throw error;
       }
-      await jitterDelay(this.detailIntervalMs);
+      if (!entry.data) await jitterDelay(this.detailIntervalMs);
     }
     return {
       page,
@@ -236,18 +241,29 @@ export class PortalZukRealEstateCatalogProvider implements CatalogProvider {
     return parsePortalZukLot(page.html, canonicalUrl(page.url || url));
   }
 
-  private async discover(): Promise<string[]> {
+  public async scrapePartnerLot(url: string): Promise<LotData> {
+    const target = canonicalUrl(url);
+    const entry = (await (this.entriesPromise ??= this.discover()))
+      .find((candidate) => candidate.url === target && candidate.data);
+    if (!entry?.data) {
+      throw new TerminalLotUnavailableError(`Portal Zuk partner lot was not found in the current catalog: ${target}`);
+    }
+    return entry.data;
+  }
+
+  private async discover(): Promise<PortalCatalogEntry[]> {
     const first = await this.client.get(CATALOG_URL);
     if (first.status < 200 || first.status >= 300) {
       throw new Error(`Portal Zuk catalog failed: HTTP ${first.status}`);
     }
-    const entries = new Set<string>();
+    const entries = new Map<string, PortalCatalogEntry>();
     let totalCards = 0;
     let ownCount = 0;
     let partnerDivCount = 0;
     const expected = catalogCount(first.html);
     let parsed = parseCatalogFragment(first.html);
-    for (const url of parsed.ownUrls) entries.add(url);
+    for (const url of parsed.ownUrls) entries.set(url, { url });
+    for (const entry of parsed.partnerEntries) entries.set(entry.url, entry);
     totalCards += parsed.cardCount;
     ownCount += parsed.ownCount;
     partnerDivCount += parsed.partnerDivCount;
@@ -259,18 +275,20 @@ export class PortalZukRealEstateCatalogProvider implements CatalogProvider {
         throw new Error(`Portal Zuk catalog pagination failed: HTTP ${next.status}`);
       }
       parsed = parseCatalogFragment(next.html);
-      for (const url of parsed.ownUrls) entries.add(url);
+      for (const url of parsed.ownUrls) entries.set(url, { url });
+      for (const entry of parsed.partnerEntries) entries.set(entry.url, entry);
       totalCards += parsed.cardCount;
       ownCount += parsed.ownCount;
       partnerDivCount += parsed.partnerDivCount;
     }
     if (!entries.size) throw new Error('Portal Zuk catalog returned no own real-estate lot links');
-    return [...entries];
+    return [...entries.values()];
   }
 }
 
 export function parseCatalogFragment(html: string): {
   ownUrls: string[];
+  partnerEntries: PortalCatalogEntry[];
   cardCount: number;
   ownCount: number;
   partnerDivCount: number;
@@ -281,11 +299,93 @@ export function parseCatalogFragment(html: string): {
   const ownUrls = unique(ownCards.map((_, element) =>
     canonicalUrl($(element).find('.card-property-image-wrapper a[href*="/imovel/"]').attr('href') ?? '')).get()
     .filter(Boolean));
+  const partnerEntries = cards
+    .filter((_, element) => ($(element).attr('data-parceiro') ?? '') !== '0')
+    .map((_, element) => parsePartnerCard($.html(element)))
+    .get()
+    .filter((entry): entry is PortalCatalogEntry => Boolean(entry));
   return {
     ownUrls,
+    partnerEntries,
     cardCount: cards.length,
     ownCount: ownCards.length,
     partnerDivCount: $('#list-items-parceiro-carregar-mais').length,
+  };
+}
+
+function parsePartnerCard(html: string): PortalCatalogEntry | undefined {
+  const $ = cheerio.load(html);
+  const card = $('.card_lotes_div').first();
+  const link = card.find('.leilao-vitrine').first();
+  const rawUrl = link.attr('data-url-externa') || link.attr('href') || '';
+  if (!rawUrl) return undefined;
+  const url = canonicalUrl(rawUrl);
+  const parsedUrl = new URL(url);
+  // Kwara entries shown in this catalog are consortium quotas (including vehicles and heavy
+  // equipment), not the real properties suggested by their showcase cards.
+  if (parsedUrl.hostname !== 'comprei.pgfn.gov.br') return undefined;
+  const externalId = parsedUrl.pathname.match(/\/anuncio\/detalhe\/(\d+)/)?.[1] ?? '';
+  const eventCode = link.attr('data-idleilao')?.trim() ?? '';
+  const portalLotId = link.attr('data-idlote')?.trim() ?? externalId;
+  const propertyType = normalizePropertyType(card.find('.card-property-price-lote').first().text());
+  const addressParts = card.find('.card-property-address span').map((_, element) => compact($(element).text())).get();
+  const locationText = addressParts[0] ?? '';
+  const street = addressParts[1] ?? '';
+  const location = /^(.*?)\s*\/\s*([A-Z]{2})(?:\s*-\s*(.*))?$/i.exec(locationText);
+  const city = compact(location?.[1] ?? '');
+  const state = (location?.[2] ?? '').toUpperCase();
+  const neighborhood = compact(location?.[3] ?? '');
+  const address = [street, neighborhood, city && state ? `${city}/${state}` : city].filter(Boolean).join(' - ');
+  const value = money(card.find('.card-property-price-value').first().text());
+  const auctionEnd = parseShortBrazilianDate(card.find('.card-property-price-data').first().text())
+    ?? parseShortBrazilianDate(card.text())
+    ?? new Date(Date.now() + 30 * 24 * 60 * 60 * 1_000);
+  const areaText = card.find('.card-property-info-label').first().text();
+  const area = decimal(areaText);
+  const imageUrl = absoluteUrl(card.find('.card-property-image-wrapper img[src]').first().attr('src') ?? '');
+  const occupancyText = normalize(card.find('.card-property-news').first().text());
+  const occupancy = occupancyText.includes('desocupado') ? 'desocupado'
+    : occupancyText.includes('ocupado') ? 'ocupado' : '';
+  const status = saleStatus(card.text(), auctionEnd, 0);
+
+  return {
+    url,
+    data: {
+      title: `${propertyTypeLabel(propertyType)} - ${address}`,
+      currentBid: value,
+      nextBid: value,
+      auctionEnd,
+      city,
+      state,
+      address,
+      neighborhood,
+      neighborhoodNormalized: normalizeLocation(neighborhood),
+      propertyType,
+      ...(occupancy ? { occupancyStatus: occupancy } : {}),
+      ...(area ? { totalAreaM2: area } : {}),
+      ...(value ? { firstRoundMinimumValue: value } : {}),
+      lotNumber: externalId || portalLotId,
+      externalCode: externalId || portalLotId,
+      sourceAnnouncementId: externalId || portalLotId,
+      consignor: 'Comprei PGFN',
+      origin: 'Comprei PGFN via Portal Zuk',
+      saleStatus: status,
+      displayStatus: status,
+      classification: 'Imóveis',
+      assetType: 'real_estate',
+      eventName: 'Comprei PGFN',
+      eventExternalCode: eventCode || 'comprei-pgfn',
+      eventUrl: url,
+      imageUrls: imageUrl ? [imageUrl] : [],
+      additionalDetails: compactDetails({
+        agregador: 'Portal Zuk',
+        portalZukCatalogUrl: CATALOG_URL,
+        portalZukPartner: 'Comprei PGFN',
+        portalZukEventId: eventCode,
+        portalZukLotId: portalLotId,
+        originalUrl: url,
+      }),
+    },
   };
 }
 
@@ -451,10 +551,10 @@ function documentType(label: string): string {
 }
 
 function parseShortBrazilianDate(value: string): Date | undefined {
-  const match = /(\d{2})\/(\d{2})\/(\d{2,4})\s+às\s+(\d{2})h(\d{2})/i.exec(compact(value));
+  const match = /(\d{2})\/(\d{2})\/(\d{2,4})(?:\s+(?:às\s+)?(\d{2})(?:h|:)(\d{2}))?/i.exec(compact(value));
   if (!match) return undefined;
   const year = match[3]?.length === 2 ? `20${match[3]}` : match[3];
-  const date = new Date(`${year}-${match[2]}-${match[1]}T${match[4]}:${match[5]}:00-03:00`);
+  const date = new Date(`${year}-${match[2]}-${match[1]}T${match[4] ?? '23'}:${match[5] ?? '59'}:00-03:00`);
   return Number.isNaN(date.getTime()) ? undefined : date;
 }
 

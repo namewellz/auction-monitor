@@ -18,6 +18,37 @@ export interface PendingMedia {
   site: string;
 }
 
+function normalizeIdentity(value: string | null | undefined): string {
+  return (value ?? '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/\b(?:n|no|numero)\b/g, ' ')
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim();
+}
+
+function registrationFrom(data: LotData | null): string {
+  const details = data?.additionalDetails ?? {};
+  return normalizeIdentity(
+    details.matricula
+      ?? details.registroImovel
+      ?? details.registration
+      ?? details.numeroMatricula,
+  );
+}
+
+function numeric(value: string | null): number | undefined {
+  if (value === null) return undefined;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : undefined;
+}
+
+function closeArea(left: number | undefined, right: number | undefined): boolean {
+  if (!left || !right) return false;
+  return Math.abs(left - right) / Math.max(left, right) <= 0.02;
+}
+
 export interface PendingDocument extends PendingMedia {
   label?: string;
   documentType?: string;
@@ -158,6 +189,7 @@ export class HistoricalRepository {
       await this.insertChangeLog(client, marketLotId, previous, data, now, snapshotHash);
       await this.upsertMedia(client, marketLotId, data, now);
       await this.upsertRealEstateDetails(client, marketLotId, data);
+      if (site === 'portalzuk') await this.recordRealEstateDuplicateCandidates(client, marketLotId, data);
       await this.upsertVehicleDetails(client, marketLotId, data);
       await this.upsertBidHistory(client, marketLotId, data);
       await client.query('COMMIT');
@@ -691,6 +723,59 @@ export class HistoricalRepository {
         data.longitude ?? null, data.acceptsFinancing ?? null, data.firstRoundMinimumValue ?? null,
         data.secondRoundMinimumValue ?? null, data.thirdRoundMinimumValue ?? null],
     );
+  }
+
+  private async recordRealEstateDuplicateCandidates(
+    client: PoolClient,
+    marketLotId: number,
+    data: LotData,
+  ): Promise<void> {
+    if (data.assetType !== 'real_estate' || !data.city || !data.state) return;
+    const rows = await client.query<{
+      id: string;
+      address: string | null;
+      total_area_m2: string | null;
+      private_area_m2: string | null;
+      raw_data_json: LotData;
+    }>(
+      `SELECT ml.id,ml.address,red.total_area_m2,red.private_area_m2,ml.raw_data_json
+       FROM market_lots ml
+       LEFT JOIN real_estate_details red ON red.market_lot_id=ml.id
+       WHERE ml.id<>$1 AND ml.asset_type='real_estate' AND ml.site<>'portalzuk'
+         AND LOWER(COALESCE(ml.state,''))=LOWER($2)
+         AND LOWER(COALESCE(ml.city,''))=LOWER($3)
+       ORDER BY ml.last_seen_at DESC LIMIT 750`,
+      [marketLotId, data.state, data.city],
+    );
+    const registration = normalizeIdentity(data.additionalDetails?.matricula);
+    const address = normalizeIdentity(data.address);
+    const area = data.privateAreaM2 ?? data.totalAreaM2;
+    for (const candidate of rows.rows) {
+      const candidateRegistration = registrationFrom(candidate.raw_data_json);
+      const candidateAddress = normalizeIdentity(candidate.address);
+      const candidateArea = numeric(candidate.private_area_m2) ?? numeric(candidate.total_area_m2);
+      let reason = '';
+      let confidence = 0;
+      if (registration.length >= 4 && registration === candidateRegistration) {
+        reason = 'registration';
+        confidence = 100;
+      } else if (address.length >= 12 && address === candidateAddress && closeArea(area, candidateArea)) {
+        reason = 'address_area';
+        confidence = 90;
+      } else if (address.length >= 18 && address === candidateAddress) {
+        reason = 'address';
+        confidence = 80;
+      }
+      if (!reason) continue;
+      await client.query(
+        `INSERT INTO lot_duplicate_candidates
+          (source_lot_id,candidate_lot_id,match_reason,confidence,observed_at)
+         VALUES ($1,$2,$3,$4,NOW())
+         ON CONFLICT(source_lot_id,candidate_lot_id,match_reason) DO UPDATE SET
+           confidence=EXCLUDED.confidence,observed_at=EXCLUDED.observed_at`,
+        [marketLotId, Number(candidate.id), reason, confidence],
+      );
+    }
   }
 
   private async upsertVehicleDetails(client: PoolClient, marketLotId: number, data: LotData): Promise<void> {

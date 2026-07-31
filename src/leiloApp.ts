@@ -62,6 +62,7 @@ import { integrationDefinitions } from './integrations.js';
 import { CatalogCollectionScheduler } from './scheduler/catalogCollection.js';
 import { InsigneRealEstateCatalogProvider } from './scrapers/providers/insigneRealEstateCatalog.js';
 import { MegaRealEstateCatalogProvider } from './scrapers/providers/megaRealEstateCatalog.js';
+import { PortalZukClient, PortalZukRealEstateCatalogProvider } from './scrapers/providers/portalZukRealEstateCatalog.js';
 
 const logger = new Logger(config.logLevel);
 const pool = createPostgresPool(config.postgresUrl);
@@ -143,6 +144,11 @@ const bulkCollector = new CatalogCollectionService(
       new MilanPageClient(config.milanFlareSolverrUrl),
     ),
     new MegaRealEstateCatalogProvider(config.megaRequestIntervalMs),
+    new PortalZukRealEstateCatalogProvider(
+      config.portalZukRequestIntervalMs,
+      config.portalZukPageIntervalMs,
+      new PortalZukClient(config.portalZukFlareSolverrUrl),
+    ),
     new SuperbidCatalogProvider(config.superbidCatalogPageSize, config.superbidRequestIntervalMs,
       config.superbidCatalogMaxOffers),
   ],

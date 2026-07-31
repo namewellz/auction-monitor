@@ -19,6 +19,7 @@ import { SatoRealEstateScraper } from './providers/satoRealEstate.js';
 import { LeiloeiroPublicoRealEstateScraper } from './providers/leiloeiroPublicoRealEstate.js';
 import { InsigneRealEstateScraper } from './providers/insigneRealEstate.js';
 import { MegaRealEstateScraper } from './providers/megaRealEstate.js';
+import { PortalZukRealEstateScraper } from './providers/portalZukRealEstate.js';
 import type { VipLeiloesClient } from './providers/vipLeiloesClient.js';
 import { ScraperFactory } from './scraperFactory.js';
 
@@ -40,6 +41,7 @@ export function createScraperFactory(
     new LeiloeiroPublicoRealEstateScraper(),
     new InsigneRealEstateScraper(),
     new MegaRealEstateScraper(),
+    new PortalZukRealEstateScraper(config.portalZukFlareSolverrUrl),
     new ExampleSiteScraper(config.exampleScraperHosts),
   ]);
 }

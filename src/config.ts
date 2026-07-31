@@ -36,6 +36,9 @@ export interface AppConfig {
   milanRequestIntervalMs: number;
   milanFlareSolverrUrl: string | undefined;
   megaRequestIntervalMs: number;
+  portalZukRequestIntervalMs: number;
+  portalZukPageIntervalMs: number;
+  portalZukFlareSolverrUrl: string | undefined;
   superbidRequestIntervalMs: number;
   superbidCatalogPageSize: number;
   superbidCatalogMaxOffers: number;
@@ -144,6 +147,10 @@ export const config: AppConfig = {
   milanRequestIntervalMs: parsePositiveInt(process.env.MILAN_REQUEST_INTERVAL_MS, 750),
   milanFlareSolverrUrl: process.env.MILAN_FLARESOLVERR_URL?.trim() || undefined,
   megaRequestIntervalMs: parsePositiveInt(process.env.MEGA_REQUEST_INTERVAL_MS, 750),
+  portalZukRequestIntervalMs: parsePositiveInt(process.env.PORTAL_ZUK_REQUEST_INTERVAL_MS, 1_000),
+  portalZukPageIntervalMs: parsePositiveInt(process.env.PORTAL_ZUK_PAGE_INTERVAL_MS, 3_000),
+  portalZukFlareSolverrUrl: process.env.PORTAL_ZUK_FLARESOLVERR_URL?.trim()
+    || process.env.MILAN_FLARESOLVERR_URL?.trim() || undefined,
   superbidRequestIntervalMs: parsePositiveInt(process.env.SUPERBID_REQUEST_INTERVAL_MS, 750),
   superbidCatalogPageSize: parsePositiveInt(process.env.SUPERBID_CATALOG_PAGE_SIZE, 100),
   superbidCatalogMaxOffers: Number.isInteger(Number(process.env.SUPERBID_CATALOG_MAX_OFFERS))

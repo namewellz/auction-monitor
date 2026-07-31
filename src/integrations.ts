@@ -43,6 +43,7 @@ export function integrationDefinitions(leiloApiUrl: string): IntegrationDefiniti
     { site: 'fidelisleiloes', name: 'Fidelis Leilões', catalog: 'real_estate', publicUrl: 'https://www.fidelisleiloes.com.br/', collectionUrl: 'https://www.fidelisleiloes.com.br/core/api/get-lotes', scopes: ['Imóveis'] },
     { site: 'milanleiloes', name: 'Milan Leilões', catalog: 'real_estate', publicUrl: 'https://milanleiloes.com.br/pesquisa/imoveis', collectionUrl: 'https://milanleiloes.com.br/pesquisa/imoveis', scopes: ['Imóveis'] },
     { site: 'megaleiloes', name: 'Mega Leilões', catalog: 'real_estate', publicUrl: 'https://www.megaleiloes.com.br/imoveis', collectionUrl: 'https://www.megaleiloes.com.br/imoveis', scopes: ['Imóveis'] },
+    { site: 'portalzuk', name: 'Portal Zuk', catalog: 'real_estate', publicUrl: 'https://www.portalzuk.com.br/leilao-de-imoveis', collectionUrl: 'https://www.portalzuk.com.br/leilao-de-imoveis', scopes: ['Imóveis próprios'] },
     { site: 'leiloeiropublico', name: 'Leiloeiro Público', catalog: 'real_estate', publicUrl: 'https://www.leiloeiropublico.com.br/', collectionUrl: 'https://www.leiloeiropublico.com.br/', scopes: ['Imóveis'] },
     { site: 'satoleiloes', name: 'Sato Leilões', catalog: 'real_estate', publicUrl: 'https://satoleiloes.com.br/', collectionUrl: 'https://satoleiloes.com.br/', scopes: ['Imóveis'] },
     { site: 'gilsonleiloes', name: 'Gilson Leilões', catalog: 'real_estate', publicUrl: 'https://www.gilsonleiloes.com.br/', collectionUrl: 'https://www.gilsonleiloes.com.br/leilao/index/imoveis', scopes: ['Imóveis'] },

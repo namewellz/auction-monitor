@@ -398,6 +398,16 @@ export async function runPostgresMigrations(pool: Pool): Promise<void> {
     ALTER TABLE real_estate_details ADD COLUMN IF NOT EXISTS second_round_minimum_value NUMERIC(16,2);
     ALTER TABLE real_estate_details ADD COLUMN IF NOT EXISTS third_round_minimum_value NUMERIC(16,2);
 
+    CREATE TABLE IF NOT EXISTS lot_duplicate_candidates (
+      source_lot_id BIGINT NOT NULL REFERENCES market_lots(id) ON DELETE CASCADE,
+      candidate_lot_id BIGINT NOT NULL REFERENCES market_lots(id) ON DELETE CASCADE,
+      match_reason TEXT NOT NULL,
+      confidence SMALLINT NOT NULL CHECK (confidence BETWEEN 0 AND 100),
+      observed_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      PRIMARY KEY (source_lot_id,candidate_lot_id,match_reason),
+      CHECK (source_lot_id <> candidate_lot_id)
+    );
+
     UPDATE real_estate_details red SET
       first_round_minimum_value = COALESCE(red.first_round_minimum_value,
         CASE WHEN ml.raw_data_json->'additionalDetails'->>'valorMinimoPrimeiraPraca' ~ '^[0-9]+([.][0-9]+)?$'
@@ -536,6 +546,7 @@ export async function runPostgresMigrations(pool: Pool): Promise<void> {
     CREATE INDEX IF NOT EXISTS idx_lot_media_storage_tier ON lot_media (storage_provider,storage_tier,last_accessed_at);
     CREATE INDEX IF NOT EXISTS idx_real_estate_location ON real_estate_details (state_code,city_code,neighborhood_normalized);
     CREATE INDEX IF NOT EXISTS idx_real_estate_type ON real_estate_details (property_type,occupancy_status,accepts_financing);
+    CREATE INDEX IF NOT EXISTS idx_duplicate_candidates_candidate ON lot_duplicate_candidates (candidate_lot_id,confidence DESC);
     CREATE INDEX IF NOT EXISTS idx_vehicle_details_condition ON vehicle_details (vehicle_condition,engine_condition);
     CREATE INDEX IF NOT EXISTS idx_storage_migrations_status ON storage_migrations (status,started_at);
     CREATE INDEX IF NOT EXISTS idx_object_storage_metrics_hour ON object_storage_metrics (bucket_hour DESC);

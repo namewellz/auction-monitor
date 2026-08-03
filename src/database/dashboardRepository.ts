@@ -156,7 +156,19 @@ function canonicalStatusSql(lotAlias: string): string {
 }
 
 function normalizedCitySql(lotAlias: string): string {
-  return `LOWER(BTRIM(${lotAlias}.city))`;
+  return normalizedTextSql(`${lotAlias}.city`);
+}
+
+function normalizedTextSql(expression: string): string {
+  return `REGEXP_REPLACE(TRANSLATE(LOWER(BTRIM(COALESCE((${expression})::text,''))),
+    'áàãâäéèêëíìîïóòõôöúùûüçñ',
+    'aaaaaeeeeiiiiooooouuuucn'), '\\s+', ' ', 'g')`;
+}
+
+function normalizeFacetValues(values: string[]): string[] {
+  return [...new Set(values.map((value) => value
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .trim().toLocaleLowerCase('pt-BR').replace(/\s+/g, ' ')).filter(Boolean))];
 }
 
 function buildLotWhere(filters: DashboardFilters, omittedFacet?: LotFacetKey): { where: string; params: unknown[] } {
@@ -175,6 +187,14 @@ function buildLotWhere(filters: DashboardFilters, omittedFacet?: LotFacetKey): {
     if (omittedFacet === facet || !values?.length) return;
     conditions.push(`${column} = ANY(${addParam(values)}::${cast}[])`);
   };
+  const addNormalizedList = (
+    facet: LotFacetKey,
+    expression: string,
+    values: string[] | undefined,
+  ): void => {
+    if (omittedFacet === facet || !values?.length) return;
+    conditions.push(`${normalizedTextSql(expression)} = ANY(${addParam(normalizeFacetValues(values))}::text[])`);
+  };
 
   if (filters.search) {
     const placeholder = addParam(`%${filters.search}%`);
@@ -187,31 +207,31 @@ function buildLotWhere(filters: DashboardFilters, omittedFacet?: LotFacetKey): {
   addList('assetType', 'ml.asset_type', filters.assetTypes);
   addList('event', 'ml.event_id', filters.eventIds, 'bigint');
   addList('status', canonicalStatusSql('ml'), filters.statuses);
-  addList('brand', 'ml.brand', filters.brands);
-  addList('model', 'ml.model', filters.models);
+  addNormalizedList('brand', 'ml.brand', filters.brands);
+  addNormalizedList('model', 'ml.model', filters.models);
   addList('year', 'ml.model_year', filters.years, 'int');
   addList('state', 'ml.state', filters.states);
   if (omittedFacet !== 'city' && filters.cities?.length) {
-    const cities = filters.cities.map((city) => city.trim().toLocaleLowerCase('pt-BR'));
+    const cities = normalizeFacetValues(filters.cities);
     conditions.push(`${normalizedCitySql('ml')} = ANY(${addParam(cities)}::text[])`);
   }
   if (omittedFacet !== 'neighborhood' && filters.neighborhoods?.length) {
     conditions.push(`EXISTS (SELECT 1 FROM real_estate_details red WHERE red.market_lot_id=ml.id
-      AND red.neighborhood_normalized = ANY(${addParam(filters.neighborhoods)}::text[]))`);
+      AND ${normalizedTextSql('red.neighborhood')} = ANY(${addParam(normalizeFacetValues(filters.neighborhoods))}::text[]))`);
   }
   if (omittedFacet !== 'propertyType' && filters.propertyTypes?.length) {
     conditions.push(`EXISTS (SELECT 1 FROM real_estate_details red WHERE red.market_lot_id=ml.id
-      AND red.property_type = ANY(${addParam(filters.propertyTypes)}::text[]))`);
+      AND ${normalizedTextSql('red.property_type')} = ANY(${addParam(normalizeFacetValues(filters.propertyTypes))}::text[]))`);
   }
   if (omittedFacet !== 'vehicleCondition' && filters.vehicleConditions?.length) {
     conditions.push(`EXISTS (SELECT 1 FROM vehicle_details vd WHERE vd.market_lot_id=ml.id
-      AND vd.vehicle_condition = ANY(${addParam(filters.vehicleConditions)}::text[]))`);
+      AND ${normalizedTextSql('vd.vehicle_condition')} = ANY(${addParam(normalizeFacetValues(filters.vehicleConditions))}::text[]))`);
   }
-  addList('origin', 'ml.origin', filters.origins);
-  addList('consignor', 'ml.consignor', filters.consignors);
-  addList('classification', 'ml.classification', filters.classifications);
-  addList('fuel', 'ml.fuel', filters.fuels);
-  addList('transmission', 'ml.transmission', filters.transmissions);
+  addNormalizedList('origin', 'ml.origin', filters.origins);
+  addNormalizedList('consignor', 'ml.consignor', filters.consignors);
+  addNormalizedList('classification', 'ml.classification', filters.classifications);
+  addNormalizedList('fuel', 'ml.fuel', filters.fuels);
+  addNormalizedList('transmission', 'ml.transmission', filters.transmissions);
   if (omittedFacet !== 'runningAtEntry' && filters.runningAtEntry !== undefined) {
     conditions.push(`ml.running_at_entry = ${addParam(filters.runningAtEntry)}`);
   }
@@ -851,30 +871,39 @@ export class DashboardRepository {
       { key: 'event', value: 'ml.event_id::text', label: "COALESCE(ae.name,'Evento sem nome')",
         groupedValue: 'ml.event_id::text', groupedLabel: "COALESCE(ae.name,'Evento sem nome')", limit: 500 },
       { key: 'status', value: canonicalStatusSql('ml'), groupedValue: canonicalStatusSql('ml') },
-      { key: 'brand', value: 'ml.brand', groupedValue: 'ml.brand' },
-      { key: 'model', value: 'ml.model', groupedValue: 'ml.model', limit: 1000 },
+      { key: 'brand', value: normalizedTextSql('ml.brand'), label: 'ml.brand',
+        groupedValue: normalizedTextSql('ml.brand'), groupedLabel: 'ml.brand' },
+      { key: 'model', value: normalizedTextSql('ml.model'), label: 'ml.model',
+        groupedValue: normalizedTextSql('ml.model'), groupedLabel: 'ml.model', limit: 1000 },
       { key: 'year', value: 'ml.model_year::text', groupedValue: 'ml.model_year::text', orderBy: 'value::int DESC' },
       { key: 'state', value: 'ml.state', groupedValue: 'ml.state' },
       {
         key: 'city',
         value: normalizedCitySql('ml'),
-        label: `INITCAP(${normalizedCitySql('ml')})`,
+        label: 'ml.city',
         groupedValue: normalizedCitySql('ml'),
-        groupedLabel: `INITCAP(${normalizedCitySql('ml')})`,
+        groupedLabel: 'ml.city',
         limit: 500,
       },
-      { key: 'neighborhood', value: '(SELECT red.neighborhood_normalized FROM real_estate_details red WHERE red.market_lot_id=ml.id)',
+      { key: 'neighborhood', value: `(SELECT ${normalizedTextSql('red.neighborhood')} FROM real_estate_details red WHERE red.market_lot_id=ml.id)`,
         label: "(SELECT red.neighborhood FROM real_estate_details red WHERE red.market_lot_id=ml.id)",
-        groupedValue: 'red.neighborhood_normalized', groupedLabel: 'red.neighborhood', limit: 1000 },
-      { key: 'propertyType', value: '(SELECT red.property_type FROM real_estate_details red WHERE red.market_lot_id=ml.id)',
-        groupedValue: 'red.property_type', limit: 500 },
-      { key: 'vehicleCondition', value: '(SELECT vd.vehicle_condition FROM vehicle_details vd WHERE vd.market_lot_id=ml.id)',
-        groupedValue: 'vd.vehicle_condition', limit: 100 },
-      { key: 'origin', value: 'ml.origin', groupedValue: 'ml.origin', limit: 500 },
-      { key: 'consignor', value: 'ml.consignor', groupedValue: 'ml.consignor', limit: 1000 },
-      { key: 'classification', value: 'ml.classification', groupedValue: 'ml.classification' },
-      { key: 'fuel', value: 'ml.fuel', groupedValue: 'ml.fuel' },
-      { key: 'transmission', value: 'ml.transmission', groupedValue: 'ml.transmission' },
+        groupedValue: normalizedTextSql('red.neighborhood'), groupedLabel: 'red.neighborhood', limit: 1000 },
+      { key: 'propertyType', value: `(SELECT ${normalizedTextSql('red.property_type')} FROM real_estate_details red WHERE red.market_lot_id=ml.id)`,
+        label: '(SELECT red.property_type FROM real_estate_details red WHERE red.market_lot_id=ml.id)',
+        groupedValue: normalizedTextSql('red.property_type'), groupedLabel: 'red.property_type', limit: 500 },
+      { key: 'vehicleCondition', value: `(SELECT ${normalizedTextSql('vd.vehicle_condition')} FROM vehicle_details vd WHERE vd.market_lot_id=ml.id)`,
+        label: '(SELECT vd.vehicle_condition FROM vehicle_details vd WHERE vd.market_lot_id=ml.id)',
+        groupedValue: normalizedTextSql('vd.vehicle_condition'), groupedLabel: 'vd.vehicle_condition', limit: 100 },
+      { key: 'origin', value: normalizedTextSql('ml.origin'), label: 'ml.origin',
+        groupedValue: normalizedTextSql('ml.origin'), groupedLabel: 'ml.origin', limit: 500 },
+      { key: 'consignor', value: normalizedTextSql('ml.consignor'), label: 'ml.consignor',
+        groupedValue: normalizedTextSql('ml.consignor'), groupedLabel: 'ml.consignor', limit: 1000 },
+      { key: 'classification', value: normalizedTextSql('ml.classification'), label: 'ml.classification',
+        groupedValue: normalizedTextSql('ml.classification'), groupedLabel: 'ml.classification' },
+      { key: 'fuel', value: normalizedTextSql('ml.fuel'), label: 'ml.fuel',
+        groupedValue: normalizedTextSql('ml.fuel'), groupedLabel: 'ml.fuel' },
+      { key: 'transmission', value: normalizedTextSql('ml.transmission'), label: 'ml.transmission',
+        groupedValue: normalizedTextSql('ml.transmission'), groupedLabel: 'ml.transmission' },
       {
         key: 'runningAtEntry',
         value: "CASE WHEN ml.running_at_entry IS TRUE THEN 'yes' WHEN ml.running_at_entry IS FALSE THEN 'no' END",
@@ -946,8 +975,10 @@ export class DashboardRepository {
         WHERE ${query.where}
           AND NULLIF(BTRIM(facet.value), '') IS NOT NULL
       ), grouped AS (
-        SELECT key,value,label,COUNT(*)::int AS count
-        FROM expanded GROUP BY key,value,label
+        SELECT key,value,
+          (ARRAY_AGG(label ORDER BY OCTET_LENGTH(label)-LENGTH(label) DESC, label DESC NULLS LAST))[1] AS label,
+          COUNT(*)::int AS count
+        FROM expanded GROUP BY key,value
       )
       SELECT key,value,label,count
       FROM grouped
@@ -981,10 +1012,13 @@ export class DashboardRepository {
         LEFT JOIN auction_events ae ON ae.id = ml.event_id
         WHERE ${query.where}
       )
-      SELECT value::text, label::text, COUNT(*)::int AS count
+      SELECT value::text,
+        (ARRAY_AGG(label::text ORDER BY OCTET_LENGTH(label::text)-LENGTH(label::text) DESC,
+          label::text DESC NULLS LAST))[1] AS label,
+        COUNT(*)::int AS count
       FROM filtered
       WHERE NULLIF(BTRIM(value::text), '') IS NOT NULL
-      GROUP BY value, label
+      GROUP BY value
       ORDER BY ${definition.orderBy ?? 'COUNT(*) DESC, label ASC'}
       LIMIT $${query.params.length}
     `, query.params);

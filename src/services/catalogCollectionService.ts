@@ -36,7 +36,12 @@ export class CatalogCollectionService {
     private readonly mediaStorage: MediaStorageService,
     private readonly logger: Logger,
     private readonly maxPages: number,
+    private readonly options: { recordRun?: boolean; processMedia?: boolean } = {},
   ) {}
+
+  public sites(): string[] {
+    return [...new Set(this.providers.map((provider) => provider.site))].sort();
+  }
 
   public getProgress(): CatalogCollectionProgress {
     return { ...this.progress };
@@ -47,7 +52,7 @@ export class CatalogCollectionService {
     const selected = site ? this.providers.filter((provider) => provider.site === site) : this.providers;
     if (!selected.length) throw new Error(`No catalog provider registered for site: ${site ?? 'all'}`);
     this.progress = { ...emptyProgress(), running: true, ...(site ? { site } : {}), startedAt: new Date().toISOString() };
-    const runId = await this.repository.startRun(undefined, site);
+    const runId = this.options.recordRun === false ? undefined : await this.repository.startRun(undefined, site);
     const visited = new Set<string>();
 
     try {
@@ -77,7 +82,7 @@ export class CatalogCollectionService {
         finishedAt: new Date().toISOString(),
         ...(runStatus === 'failed' && errorSummary ? { lastError: errorSummary } : {}),
       });
-      await this.repository.finishRun(runId, {
+      if (runId !== undefined) await this.repository.finishRun(runId, {
         discovered: this.progress.discovered,
         collected: this.progress.saved,
         failed: this.progress.failed,
@@ -91,7 +96,7 @@ export class CatalogCollectionService {
         completedProviders,
         failedProviders: providerErrors.length,
       });
-      void this.mediaStorage.downloadPending().then((media) => {
+      if (this.options.processMedia !== false) void this.mediaStorage.downloadPending().then((media) => {
         this.logger.info('Catalog media processed asynchronously', { ...media });
       }).catch((error: unknown) => {
         this.logger.error('Catalog media processing failed', {
@@ -101,7 +106,7 @@ export class CatalogCollectionService {
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       Object.assign(this.progress, { running: false, finishedAt: new Date().toISOString(), lastError: message });
-      await this.repository.finishRun(
+      if (runId !== undefined) await this.repository.finishRun(
         runId,
         { discovered: this.progress.discovered, collected: this.progress.saved, failed: this.progress.failed + 1,
           new: this.progress.new, updated: this.progress.updated, unchanged: this.progress.unchanged },

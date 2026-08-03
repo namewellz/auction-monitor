@@ -63,10 +63,10 @@ async function refreshCollectionProgress() {
     const strip = document.getElementById('integration-collection-strip');
     strip.hidden = !collectionRunning && !progress.lastError;
     if (collectionRunning) {
-      const currentSite = progress.currentSite || progress.site;
-      const current = document.querySelector(`[data-collect-site="${CSS.escape(currentSite || '')}"]`)?.closest('.integration-card')?.querySelector('h3')?.textContent || currentSite || 'catálogos';
+      const currentSites = (progress.currentSites?.length ? progress.currentSites : [progress.currentSite || progress.site]).filter(Boolean);
+      const current = currentSites.map((site) => document.querySelector(`[data-collect-site="${CSS.escape(site)}"]`)?.closest('.integration-card')?.querySelector('h3')?.textContent || site).join(' e ') || 'catálogos';
       document.getElementById('integration-collection-title').textContent = `Atualizando ${current}`;
-      document.getElementById('integration-collection-detail').textContent = `${progress.processedPages}/${progress.totalPages || '?'} páginas · ${progress.new} novos · ${progress.updated} atualizados · ${progress.unchanged} sem alteração`;
+      document.getElementById('integration-collection-detail').textContent = `${progress.processedPages}/${progress.totalPages || '?'} páginas · ${progress.runningSites || 0} processando · ${progress.queuedSites || 0} aguardando · ${progress.new} novos · ${progress.updated} atualizados · ${progress.unchanged} sem alteração`;
       document.getElementById('integration-collection-progress').style.width = `${progress.totalPages ? Math.round(progress.processedPages / progress.totalPages * 100) : 2}%`;
     } else if (progress.lastError) {
       document.getElementById('integration-collection-title').textContent = 'Falha na última coleta';
@@ -74,7 +74,8 @@ async function refreshCollectionProgress() {
       document.getElementById('integration-collection-progress').style.width = '100%';
     }
     document.querySelectorAll('[data-collect-site]').forEach((button) => {
-      const active = collectionRunning && button.dataset.collectSite === (progress.currentSite || progress.site);
+      const activeSites = progress.currentSites?.length ? progress.currentSites : [progress.currentSite || progress.site];
+      const active = collectionRunning && activeSites.includes(button.dataset.collectSite);
       button.disabled = collectionRunning;
       button.textContent = active ? `Atualizando ${progress.processedPages}/${progress.totalPages || '?'} páginas...` : 'Atualizar este site';
     });

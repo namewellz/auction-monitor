@@ -24,6 +24,8 @@ export interface AppConfig {
   catalogCollectionErrorBackoffMs: number;
   catalogCollectOnStart: boolean;
   catalogMaxPages: number;
+  catalogWorkerPollMs: number;
+  catalogWorkerLeaseSeconds: number;
   vipRequestIntervalMs: number;
   francoRequestIntervalMs: number;
   alessandroRequestIntervalMs: number;
@@ -135,6 +137,8 @@ export const config: AppConfig = {
   ),
   catalogCollectOnStart: parseBoolean(process.env.CATALOG_COLLECT_ON_START, false),
   catalogMaxPages: parsePositiveInt(process.env.CATALOG_MAX_PAGES, 60),
+  catalogWorkerPollMs: parsePositiveInt(process.env.CATALOG_WORKER_POLL_MS, 5_000),
+  catalogWorkerLeaseSeconds: parsePositiveInt(process.env.CATALOG_WORKER_LEASE_SECONDS, 600),
   vipRequestIntervalMs: parsePositiveInt(process.env.VIP_REQUEST_INTERVAL_MS, 750),
   francoRequestIntervalMs: parsePositiveInt(process.env.FRANCO_REQUEST_INTERVAL_MS, 750),
   alessandroRequestIntervalMs: parsePositiveInt(process.env.ALESSANDRO_REQUEST_INTERVAL_MS, 750),

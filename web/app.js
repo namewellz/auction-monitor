@@ -18,6 +18,10 @@ const facetConfig = [
   { key: 'runningAtEntry', param: 'runningAtEntry', label: 'Funcionando na entrada', catalog: 'vehicles' },
   { key: 'event', param: 'event', label: 'Evento', searchable: true },
 ];
+const normalizedFacetKeys = new Set([
+  'brand', 'model', 'city', 'neighborhood', 'propertyType', 'vehicleCondition',
+  'origin', 'consignor', 'classification', 'fuel', 'transmission',
+]);
 
 const state = {
   page: 1,
@@ -570,7 +574,8 @@ function hydrateStateFromUrl() {
   state.cursor = params.get('cursor') || null;
   state.pageCursors = new Map([[state.page, state.cursor]]);
   facetConfig.forEach((config) => {
-    const values = [...new Set(params.getAll(config.param).flatMap((value) => value.split(',')).filter(Boolean))];
+    const values = [...new Set(params.getAll(config.param).flatMap((value) => value.split(',')).filter(Boolean)
+      .map((value) => normalizedFacetKeys.has(config.key) ? normalizeSearch(value) : value))];
     state.filters[config.key] = config.key === 'assetType' && ['car', 'motorcycle', 'heavy'].every((value) => values.includes(value)) ? [] : values;
   });
 }
@@ -893,9 +898,15 @@ function facetLabel(key, value) {
   if (key === 'assetType') return assetTypeLabel(value);
   if (key === 'status') return businessStateLabel(value);
   if (key === 'runningAtEntry') return value === 'yes' ? 'Sim' : 'Não';
-  if (key === 'propertyType') return String(value).replace(/(^|\s)\S/g, (letter) => letter.toUpperCase());
+  if (key === 'brand') return String(value).toLocaleUpperCase('pt-BR');
+  if (['city', 'neighborhood', 'propertyType', 'classification', 'fuel', 'transmission'].includes(key)) return titleCaseFacet(value);
   if (key === 'vehicleCondition') return ({ sucata: 'Sucata', batido: 'Batido', avariado: 'Avariado' })[value] || value;
   return value;
+}
+
+function titleCaseFacet(value) {
+  return String(value || '').toLocaleLowerCase('pt-BR')
+    .replace(/(^|\s)\S/g, (letter) => letter.toLocaleUpperCase('pt-BR'));
 }
 
 async function startCollection() {
@@ -932,8 +943,13 @@ async function pollCollection() {
   byId('collection-strip').hidden = !state.collecting && !progress.lastError;
   if (state.collecting) {
     const percentage = progress.totalPages ? Math.round((progress.processedPages / progress.totalPages) * 100) : 2;
-    byId('collection-title').textContent = `Atualizando ${siteLabel(progress.currentSite || progress.site) || 'catálogos'}`;
-    byId('collection-detail').textContent = `${progress.processedPages}/${progress.totalPages || '?'} páginas · ${progress.new} novos · ${progress.updated} atualizados · ${progress.unchanged} sem alteração`;
+    const activeSites = (progress.currentSites?.length ? progress.currentSites : [progress.currentSite || progress.site])
+      .filter(Boolean).map(siteLabel);
+    byId('collection-title').textContent = activeSites.length
+      ? `Atualizando ${activeSites.join(' e ')}` : 'Atualizando catálogos';
+    const siteProgress = progress.queuedSites === undefined ? ''
+      : ` · ${progress.runningSites} processando · ${progress.queuedSites} aguardando`;
+    byId('collection-detail').textContent = `${progress.processedPages}/${progress.totalPages || '?'} páginas${siteProgress} · ${progress.new} novos · ${progress.updated} atualizados · ${progress.unchanged} sem alteração`;
     byId('collection-progress').style.width = `${percentage}%`;
   } else if (progress.lastError) {
     byId('collection-title').textContent = 'Falha na última coleta';
@@ -973,7 +989,7 @@ function relativeTime(value) {
 
 function positiveNumber(value, fallback) { const parsed = Number(value); return Number.isInteger(parsed) && parsed > 0 ? parsed : fallback; }
 function normalizeStatus(value) { return String(value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z]/gi, '').toLowerCase(); }
-function normalizeSearch(value) { return String(value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim(); }
+function normalizeSearch(value) { return String(value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim().replace(/\s+/g, ' '); }
 function currency(value) { return value == null ? '-' : new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(value); }
 function number(value) { return new Intl.NumberFormat('pt-BR').format(Number(value || 0)); }
 function dateTime(value) { return value ? new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short', timeStyle: 'short' }).format(new Date(value)) : '-'; }

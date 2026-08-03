@@ -157,7 +157,8 @@ export async function runPostgresMigrations(pool: Pool): Promise<void> {
     UPDATE market_lots SET revalidation_finished_at=NOW(),next_check_at=NOW(),
       revalidation_error=COALESCE(revalidation_error,'Processamento interrompido antes da conclusão.'),
       consecutive_failures=consecutive_failures+1
-    WHERE revalidation_started_at IS NOT NULL AND revalidation_finished_at IS NULL;
+    WHERE revalidation_started_at IS NOT NULL AND revalidation_finished_at IS NULL
+      AND COALESCE(revalidation_due_at,revalidation_started_at+INTERVAL '15 minutes')<NOW();
     ALTER TABLE lot_snapshots ADD COLUMN IF NOT EXISTS bidder_alias TEXT;
 
     UPDATE market_lots SET asset_type='car'
@@ -515,6 +516,32 @@ export async function runPostgresMigrations(pool: Pool): Promise<void> {
       error TEXT
     );
 
+    CREATE TABLE IF NOT EXISTS catalog_collection_jobs (
+      id BIGSERIAL PRIMARY KEY,
+      cycle_run_id BIGINT NOT NULL REFERENCES collection_runs(id) ON DELETE CASCADE,
+      site TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'queued',
+      worker_id TEXT,
+      available_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      lease_expires_at TIMESTAMPTZ,
+      started_at TIMESTAMPTZ,
+      finished_at TIMESTAMPTZ,
+      attempts INTEGER NOT NULL DEFAULT 0,
+      progress JSONB NOT NULL DEFAULT '{}'::jsonb,
+      error TEXT,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      UNIQUE(cycle_run_id, site)
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_catalog_collection_jobs_claim
+      ON catalog_collection_jobs (status,available_at,created_at);
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_catalog_collection_jobs_active_site
+      ON catalog_collection_jobs (site) WHERE status IN ('queued','running');
+
+    UPDATE catalog_collection_jobs SET status='queued',worker_id=NULL,lease_expires_at=NULL,
+      available_at=NOW(),error=COALESCE(error,'Worker interrompido antes da conclusao.')
+    WHERE status='running' AND lease_expires_at<NOW();
+
     ALTER TABLE collection_runs ADD COLUMN IF NOT EXISTS new_count INTEGER NOT NULL DEFAULT 0;
     ALTER TABLE collection_runs ADD COLUMN IF NOT EXISTS updated_count INTEGER NOT NULL DEFAULT 0;
     ALTER TABLE collection_runs ADD COLUMN IF NOT EXISTS unchanged_count INTEGER NOT NULL DEFAULT 0;
@@ -523,7 +550,10 @@ export async function runPostgresMigrations(pool: Pool): Promise<void> {
     UPDATE collection_runs
     SET status='failed', finished_at=COALESCE(finished_at,NOW()),
       error=COALESCE(error,'Execução interrompida antes da conclusão.')
-    WHERE status='running';
+    WHERE status='running' AND NOT EXISTS(
+      SELECT 1 FROM catalog_collection_jobs job
+      WHERE job.cycle_run_id=collection_runs.id AND job.status IN ('queued','running')
+    );
 
     CREATE INDEX IF NOT EXISTS idx_market_lots_due ON market_lots (finalized_at, next_check_at);
     CREATE INDEX IF NOT EXISTS idx_collection_runs_started ON collection_runs (started_at DESC);

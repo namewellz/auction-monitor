@@ -42,11 +42,17 @@ Esse comando inicia o coletor da Leilo, PostgreSQL, MinIO e o painel em `http://
 Os dados ficam nos volumes `postgres-data` e `minio-data`. O console do MinIO fica em
 `http://localhost:9001` (usuario `auctionadmin`, senha `auctionsecret` no ambiente local).
 
-O painel inicia uma coleta automaticamente e permite disparar novas coletas pelo botao `Atualizar coleta`.
-Por padrao, a coleta funciona em modo continuo: ao concluir uma varredura completa, aguarda
-`CATALOG_COLLECTION_IDLE_MS` (60 segundos por padrao) e inicia o ciclo seguinte. Falhas
-aplicam o intervalo maior de `CATALOG_COLLECTION_ERROR_BACKOFF_MS` (cinco minutos por
-padrao). Nao ha sobreposicao entre ciclos.
+O painel agenda a coleta e permite disparar novas coletas pelo botao `Atualizar coleta`.
+As origens ficam em uma fila persistida no PostgreSQL e sao reservadas atomicamente pelos
+containers `catalog-worker`. Por padrao o Compose inicia dois workers; altere
+`CATALOG_WORKER_REPLICAS` ou execute `docker compose up -d --scale catalog-worker=3`
+para mudar a capacidade sem dividir sites manualmente. O lease e o intervalo de busca na
+fila usam `CATALOG_WORKER_LEASE_SECONDS` e `CATALOG_WORKER_POLL_MS`.
+
+No modo continuo, quando todas as origens terminam, o painel aguarda
+`CATALOG_COLLECTION_IDLE_MS` (60 segundos por padrao) e agenda o ciclo seguinte. Um site
+nao pode estar ativo em dois workers, e tarefas cujo worker parou voltam automaticamente
+para a fila depois do vencimento do lease.
 
 Para restaurar o agendamento tradicional, configure `CATALOG_COLLECTION_MODE=cron` e
 informe a expressao em `CATALOG_COLLECTION_CRON`.

@@ -59,10 +59,11 @@ import { MilanPageClient, MilanRealEstateCatalogProvider } from './scrapers/prov
 import { SatoRealEstateCatalogProvider } from './scrapers/providers/satoRealEstateCatalog.js';
 import { LeiloeiroPublicoRealEstateCatalogProvider } from './scrapers/providers/leiloeiroPublicoRealEstateCatalog.js';
 import { integrationDefinitions } from './integrations.js';
-import { CatalogCollectionScheduler } from './scheduler/catalogCollection.js';
 import { InsigneRealEstateCatalogProvider } from './scrapers/providers/insigneRealEstateCatalog.js';
 import { MegaRealEstateCatalogProvider } from './scrapers/providers/megaRealEstateCatalog.js';
 import { PortalZukClient, PortalZukRealEstateCatalogProvider } from './scrapers/providers/portalZukRealEstateCatalog.js';
+import { CatalogQueueRepository } from './database/catalogQueueRepository.js';
+import { CatalogQueueScheduler } from './scheduler/catalogQueue.js';
 
 const logger = new Logger(config.logLevel);
 const pool = createPostgresPool(config.postgresUrl);
@@ -179,8 +180,11 @@ const historicalScheduler = new HistoricalCollectorScheduler(
   config.collectorIdlePollMs,
 );
 const dashboardRepository = new DashboardRepository(pool);
+const catalogQueue = new CatalogQueueRepository(pool);
+const integrations = integrationDefinitions(config.leiloApiUrl);
+const availableCatalogSites = bulkCollector.sites();
 const server = new DashboardServer(
-  dashboardRepository, bulkCollector, mediaStorage, logger, integrationDefinitions(config.leiloApiUrl),
+  dashboardRepository, catalogQueue, mediaStorage, logger, integrations, availableCatalogSites,
 );
 
 server.listen(config.dashboardPort);
@@ -192,15 +196,14 @@ void Promise.all([
 ]).catch((error) => logger.warn('Dashboard cache warmup failed', {
   error: error instanceof Error ? error.message : String(error),
 }));
-const catalogScheduler = new CatalogCollectionScheduler(
-  bulkCollector,
+const catalogScheduler = new CatalogQueueScheduler(
+  catalogQueue,
+  availableCatalogSites,
   logger,
-  () => dashboardRepository.invalidateCaches(),
   {
     mode: config.catalogCollectionMode,
     cronExpression: config.catalogCollectionCron,
     idleMs: config.catalogCollectionIdleMs,
-    errorBackoffMs: config.catalogCollectionErrorBackoffMs,
     collectOnStart: config.catalogCollectOnStart,
   },
 );

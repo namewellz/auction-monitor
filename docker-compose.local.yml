@@ -20,6 +20,11 @@ services:
     labels:
       - com.centurylinklabs.watchtower.enable=false
 
+  catalog-worker:
+    build: .
+    labels:
+      - com.centurylinklabs.watchtower.enable=false
+
   collector:
     build: .
 

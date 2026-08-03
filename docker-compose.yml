@@ -67,7 +67,7 @@ services:
       - dist/leiloApp.js
 
 
-    environment:
+    environment: &app-environment
       POSTGRES_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
 
       MINIO_ENDPOINT: minio
@@ -93,6 +93,8 @@ services:
       CATALOG_COLLECTION_ERROR_BACKOFF_MS: ${CATALOG_COLLECTION_ERROR_BACKOFF_MS:-300000}
       CATALOG_COLLECT_ON_START: ${CATALOG_COLLECT_ON_START:-false}
       CATALOG_MAX_PAGES: ${CATALOG_MAX_PAGES:-60}
+      CATALOG_WORKER_POLL_MS: ${CATALOG_WORKER_POLL_MS:-5000}
+      CATALOG_WORKER_LEASE_SECONDS: ${CATALOG_WORKER_LEASE_SECONDS:-600}
 
       VIP_REQUEST_INTERVAL_MS: ${VIP_REQUEST_INTERVAL_MS:-750}
       COLLECTOR_IDLE_POLL_MS: ${COLLECTOR_IDLE_POLL_MS:-5000}
@@ -130,6 +132,32 @@ services:
     networks:
       - default
       - proxy
+
+    restart: unless-stopped
+
+
+  catalog-worker:
+    image: ${APP_IMAGE:-ghcr.io/namewellz/auction-monitor:latest}
+
+    labels:
+      - com.centurylinklabs.watchtower.enable=true
+
+    command:
+      - node
+      - dist/catalogWorker.js
+
+    environment: *app-environment
+
+    depends_on:
+      postgres:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+      flaresolverr:
+        condition: service_started
+
+    deploy:
+      replicas: ${CATALOG_WORKER_REPLICAS:-2}
 
     restart: unless-stopped
 

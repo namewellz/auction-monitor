@@ -3,7 +3,7 @@ import { readFile } from 'node:fs/promises';
 import { extname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { DashboardRepository } from '../database/dashboardRepository.js';
-import type { CatalogCollectionService } from '../services/catalogCollectionService.js';
+import type { CatalogQueueRepository } from '../database/catalogQueueRepository.js';
 import type { Logger } from '../utils/logger.js';
 import type { MediaStorageService } from '../services/mediaStorageService.js';
 import type { IntegrationDefinition } from '../integrations.js';
@@ -13,10 +13,11 @@ const webRoot = resolve(fileURLToPath(new URL('../../web', import.meta.url)));
 export class DashboardServer {
   public constructor(
     private readonly repository: DashboardRepository,
-    private readonly collector: CatalogCollectionService,
+    private readonly catalogQueue: CatalogQueueRepository,
     private readonly mediaStorage: MediaStorageService,
     private readonly logger: Logger,
     private readonly integrations: IntegrationDefinition[] = [],
+    private readonly catalogSites: string[] = [],
   ) {}
 
   public listen(port: number): void {
@@ -149,25 +150,21 @@ export class DashboardServer {
         return lot ? json(response, 200, lot) : json(response, 404, { error: 'Lote nao encontrado.' });
       }
       if (url.pathname === '/api/collection' && request.method === 'GET') {
-        return json(response, 200, this.collector.getProgress());
+        response.setHeader('Cache-Control', 'no-store');
+        return json(response, 200, await this.catalogQueue.progress());
       }
       const collectionMatch = url.pathname.match(/^\/api\/collection\/([a-z0-9_-]+)$/);
       if (collectionMatch?.[1] && request.method === 'POST') {
         const site = collectionMatch[1];
-        if (!this.integrations.some((integration) => integration.site === site)) {
+        if (!this.catalogSites.includes(site)) {
           return json(response, 404, { error: 'Integração não encontrada.' });
         }
-        if (this.collector.getProgress().running) {
-          return json(response, 409, { error: 'Já existe uma coleta em andamento.', progress: this.collector.getProgress() });
-        }
-        void this.collector.collectAll(site).finally(() => this.repository.invalidateCaches());
-        return json(response, 202, this.collector.getProgress());
+        const queued = await this.catalogQueue.enqueueCycle([site], site);
+        return json(response, 202, { ...await this.catalogQueue.progress(), queued: queued.queued > 0 });
       }
       if (url.pathname === '/api/collection' && request.method === 'POST') {
-        if (!this.collector.getProgress().running) {
-          void this.collector.collectAll().finally(() => this.repository.invalidateCaches());
-        }
-        return json(response, 202, this.collector.getProgress());
+        const queued = await this.catalogQueue.enqueueCycle(this.catalogSites);
+        return json(response, 202, { ...await this.catalogQueue.progress(), queued: queued.queued > 0 });
       }
 
       await serveStatic(url.pathname, response);

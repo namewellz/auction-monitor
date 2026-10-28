@@ -245,14 +245,36 @@ async function refreshCatalog(updateUrl = true, scope = 'all') {
       state.historyKey = historyKey;
       state.historyLoadedAt = Date.now();
     }
-    const auxiliary = fullRefresh ? Promise.all([
-      api(`/api/lots/facets?${filterParams}`, { signal: controller.signal }).catch(() => null),
-      api(`/api/stats?${filterParams}`, { signal: controller.signal }).catch(() => null),
-      loadHistory
-        ? api(`/api/collection/history?limit=10${state.filters.site.length === 1 ? `&site=${encodeURIComponent(state.filters.site[0])}` : ''}`,
-          { signal: controller.signal }).catch(() => null)
-        : Promise.resolve(null),
-    ]) : null;
+    if (fullRefresh) {
+      if (!byId('facet-list').children.length) {
+        byId('facet-list').innerHTML = '<div style="padding:16px 4px;color:#6b7280;font-size:13px">Carregando filtros…</div>';
+      }
+      const guard = (callback) => (data) => {
+        if (sequence !== state.requestSequence || !data) return;
+        callback(data);
+      };
+      const loadStats = () => {
+        if (sequence !== state.requestSequence) return;
+        void api(`/api/stats?${filterParams}`, { signal: controller.signal })
+          .then(guard((data) => renderStats(data)))
+          .catch(() => null);
+      };
+      void api(`/api/lots/facets?${filterParams}`, { signal: controller.signal })
+        .then(guard((data) => { state.facets = data.facets; renderFacets(); }))
+        .catch(() => {
+          if (sequence !== state.requestSequence) return;
+          if (!state.facets || !Object.keys(state.facets).length) {
+            byId('facet-list').innerHTML = '<div style="padding:16px 4px;color:#b42318;font-size:13px">Não foi possível carregar os filtros.</div>';
+          }
+        })
+        .finally(loadStats);
+      if (loadHistory) {
+        void api(`/api/collection/history?limit=10${state.filters.site.length === 1 ? `&site=${encodeURIComponent(state.filters.site[0])}` : ''}`,
+          { signal: controller.signal })
+          .then(guard((data) => renderCollectionHistory(data)))
+          .catch(() => null);
+      }
+    }
     const lotData = await api(`/api/lots?${lotParams}`, { signal: controller.signal });
     if (sequence !== state.requestSequence) return;
     state.total = lotData.total;
@@ -260,15 +282,6 @@ async function refreshCatalog(updateUrl = true, scope = 'all') {
     renderActiveFilters();
     renderLots(lotData);
     byId('lot-list').classList.remove('loading');
-    if (!auxiliary) return;
-    const [facetData, statsData, historyData] = await auxiliary;
-    if (sequence !== state.requestSequence) return;
-    if (facetData) {
-      state.facets = facetData.facets;
-      renderFacets();
-    }
-    if (statsData) renderStats(statsData);
-    if (historyData) renderCollectionHistory(historyData);
   } catch (error) {
     if (error.name === 'AbortError') return;
     if (sequence !== state.requestSequence) return;

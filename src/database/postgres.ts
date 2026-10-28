@@ -567,6 +567,8 @@ export async function runPostgresMigrations(pool: Pool): Promise<void> {
     CREATE INDEX IF NOT EXISTS idx_market_lots_consignor ON market_lots (consignor);
     CREATE INDEX IF NOT EXISTS idx_market_lots_classification ON market_lots (classification);
     CREATE INDEX IF NOT EXISTS idx_market_lots_asset_type ON market_lots (asset_type);
+    CREATE INDEX IF NOT EXISTS idx_market_lots_browse ON market_lots (asset_type,site,canonical_status);
+    CREATE INDEX IF NOT EXISTS idx_market_lots_auction_end ON market_lots (auction_end);
     CREATE INDEX IF NOT EXISTS idx_market_lots_vehicle_details ON market_lots (fuel, transmission, running_at_entry);
     CREATE INDEX IF NOT EXISTS idx_snapshots_lot_time ON lot_snapshots (market_lot_id, observed_at DESC);
     CREATE INDEX IF NOT EXISTS idx_change_log_lot_time ON lot_change_log (market_lot_id, observed_at DESC);

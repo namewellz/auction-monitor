@@ -35,7 +35,10 @@ export class DashboardServer {
         if (!response.writableEnded) requestController.abort();
       });
       if (url.pathname === '/api/stats' && request.method === 'GET') {
-        return json(response, 200, await this.repository.stats(filtersFromUrl(url, 1, 1)));
+        return json(response, 200, await this.repository.stats(
+          filtersFromUrl(url, 1, 1),
+          requestController.signal,
+        ));
       }
       if (url.pathname === '/api/events' && request.method === 'GET') {
         return json(response, 200, await this.repository.events(url.searchParams.get('site') ?? undefined));
@@ -114,7 +117,10 @@ export class DashboardServer {
         ));
       }
       if (url.pathname === '/api/lots/facets' && request.method === 'GET') {
-        return json(response, 200, await this.repository.facets(filtersFromUrl(url, 1, 1)));
+        return json(response, 200, await this.repository.facets(
+          filtersFromUrl(url, 1, 1),
+          requestController.signal,
+        ));
       }
       if (url.pathname === '/api/lots' && request.method === 'GET') {
         const page = positiveInt(url.searchParams.get('page'), 1);

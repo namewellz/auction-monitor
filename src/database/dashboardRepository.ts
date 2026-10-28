@@ -1,4 +1,4 @@
-import type { Pool, QueryResult } from 'pg';
+import type { Pool, QueryResult, QueryResultRow } from 'pg';
 
 export interface DashboardFilters {
   search?: string;
@@ -97,7 +97,7 @@ function dashboardCacheKey(filters: DashboardFilters): string {
   return JSON.stringify(normalized);
 }
 
-async function cancellableQuery<T extends Record<string, unknown>>(
+async function cancellableQuery<T extends QueryResultRow>(
   pool: Pool,
   text: string,
   params: unknown[],
@@ -169,6 +169,125 @@ function normalizeFacetValues(values: string[]): string[] {
   return [...new Set(values.map((value) => value
     .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
     .trim().toLocaleLowerCase('pt-BR').replace(/\s+/g, ' ')).filter(Boolean))];
+}
+
+interface FacetDefinition {
+  key: LotFacetKey;
+  value: string;
+  label?: string;
+  limit?: number;
+  orderBy?: string;
+}
+
+const ALL_FACET_KEYS: LotFacetKey[] = [
+  'site', 'assetType', 'event', 'status', 'brand', 'model', 'year', 'state', 'city',
+  'neighborhood', 'propertyType', 'vehicleCondition', 'origin', 'consignor', 'classification',
+  'fuel', 'transmission', 'runningAtEntry',
+];
+
+const VEHICLE_FACET_KEYS: LotFacetKey[] = [
+  'site', 'assetType', 'event', 'status', 'brand', 'model', 'year', 'state', 'city',
+  'origin', 'consignor', 'classification', 'fuel', 'transmission', 'runningAtEntry',
+];
+
+const REAL_ESTATE_FACET_KEYS: LotFacetKey[] = [
+  'site', 'assetType', 'event', 'status', 'state', 'city', 'neighborhood', 'propertyType',
+  'consignor', 'classification',
+];
+
+const RUNNING_AT_ENTRY_SQL = "CASE WHEN ml.running_at_entry IS TRUE THEN 'yes' WHEN ml.running_at_entry IS FALSE THEN 'no' END";
+
+const FACET_COLUMN_SQL: Record<string, string> = {
+  site: 'ml.site',
+  asset_type: 'ml.asset_type',
+  event_id: 'ml.event_id::text',
+  event_name: "COALESCE(ae.name,'Evento sem nome')",
+  status: canonicalStatusSql('ml'),
+  brand: normalizedTextSql('ml.brand'),
+  brand_label: 'ml.brand',
+  model: normalizedTextSql('ml.model'),
+  model_label: 'ml.model',
+  model_year: 'ml.model_year::text',
+  state: 'ml.state',
+  city: normalizedCitySql('ml'),
+  city_label: 'ml.city',
+  neighborhood: normalizedTextSql('red.neighborhood'),
+  neighborhood_label: 'red.neighborhood',
+  property_type: normalizedTextSql('red.property_type'),
+  property_type_label: 'red.property_type',
+  vehicle_condition: normalizedTextSql('vd.vehicle_condition'),
+  vehicle_condition_label: 'vd.vehicle_condition',
+  origin: normalizedTextSql('ml.origin'),
+  origin_label: 'ml.origin',
+  consignor: normalizedTextSql('ml.consignor'),
+  consignor_label: 'ml.consignor',
+  classification: normalizedTextSql('ml.classification'),
+  classification_label: 'ml.classification',
+  fuel: normalizedTextSql('ml.fuel'),
+  fuel_label: 'ml.fuel',
+  transmission: normalizedTextSql('ml.transmission'),
+  transmission_label: 'ml.transmission',
+  running_at_entry: RUNNING_AT_ENTRY_SQL,
+};
+
+const FACET_DEFINITIONS: FacetDefinition[] = [
+  { key: 'site', value: 'site' },
+  { key: 'assetType', value: 'asset_type' },
+  { key: 'event', value: 'event_id', label: 'event_name', limit: 500 },
+  { key: 'status', value: 'status' },
+  { key: 'brand', value: 'brand', label: 'brand_label' },
+  { key: 'model', value: 'model', label: 'model_label', limit: 1000 },
+  { key: 'year', value: 'model_year', orderBy: 'filtered.value::int DESC' },
+  { key: 'state', value: 'state' },
+  { key: 'city', value: 'city', label: 'city_label', limit: 500 },
+  { key: 'neighborhood', value: 'neighborhood', label: 'neighborhood_label', limit: 1000 },
+  { key: 'propertyType', value: 'property_type', label: 'property_type_label', limit: 500 },
+  { key: 'vehicleCondition', value: 'vehicle_condition', label: 'vehicle_condition_label', limit: 100 },
+  { key: 'origin', value: 'origin', label: 'origin_label', limit: 500 },
+  { key: 'consignor', value: 'consignor', label: 'consignor_label', limit: 1000 },
+  { key: 'classification', value: 'classification', label: 'classification_label' },
+  { key: 'fuel', value: 'fuel', label: 'fuel_label' },
+  { key: 'transmission', value: 'transmission', label: 'transmission_label' },
+  { key: 'runningAtEntry', value: 'running_at_entry' },
+];
+
+function facetColumnSql(column: string): string {
+  return FACET_COLUMN_SQL[column] ?? `ml.${column}`;
+}
+
+function facetJoins(columns: string[]): string {
+  const joins: string[] = [];
+  if (columns.includes('event_name')) joins.push('LEFT JOIN auction_events ae ON ae.id=ml.event_id');
+  if (columns.some((column) => column.startsWith('neighborhood') || column.startsWith('property_type'))) {
+    joins.push('LEFT JOIN real_estate_details red ON red.market_lot_id=ml.id');
+  }
+  if (columns.some((column) => column.startsWith('vehicle_condition'))) {
+    joins.push('LEFT JOIN vehicle_details vd ON vd.market_lot_id=ml.id');
+  }
+  return joins.join(' ');
+}
+
+function selectedFacetKeys(filters: DashboardFilters): Set<LotFacetKey> {
+  const keys: LotFacetKey[] = [];
+  if (filters.sites?.length) keys.push('site');
+  if (filters.assetTypes?.length) keys.push('assetType');
+  if (filters.eventIds?.length) keys.push('event');
+  if (filters.statuses?.length) keys.push('status');
+  if (filters.brands?.length) keys.push('brand');
+  if (filters.models?.length) keys.push('model');
+  if (filters.years?.length) keys.push('year');
+  if (filters.states?.length) keys.push('state');
+  if (filters.cities?.length) keys.push('city');
+  if (filters.neighborhoods?.length) keys.push('neighborhood');
+  if (filters.propertyTypes?.length) keys.push('propertyType');
+  if (filters.vehicleConditions?.length) keys.push('vehicleCondition');
+  if (filters.origins?.length) keys.push('origin');
+  if (filters.consignors?.length) keys.push('consignor');
+  if (filters.classifications?.length) keys.push('classification');
+  if (filters.fuels?.length) keys.push('fuel');
+  if (filters.transmissions?.length) keys.push('transmission');
+  if (filters.runningAtEntry !== undefined) keys.push('runningAtEntry');
+  return new Set(keys);
 }
 
 function buildLotWhere(filters: DashboardFilters, omittedFacet?: LotFacetKey): { where: string; params: unknown[] } {
@@ -288,33 +407,52 @@ function encodeAuctionCursor(row: Record<string, unknown>): string {
   })).toString('base64url');
 }
 
+function isAbortError(error: unknown): boolean {
+  return typeof error === 'object' && error !== null && (error as { name?: string }).name === 'AbortError';
+}
+
 export class DashboardRepository {
   private readonly statsCache = new DashboardQueryCache<Record<string, unknown>>();
   private readonly facetsCache = new DashboardQueryCache<{
     total: number; facets: Record<LotFacetKey, LotFacetOption[]>;
   }>();
+  private readonly totalCache = new DashboardQueryCache<number>(20_000, 200);
 
   public constructor(private readonly pool: Pool) {}
 
   public invalidateCaches(): void {
     this.statsCache.clear();
     this.facetsCache.clear();
+    this.totalCache.clear();
   }
 
-  public async stats(filters: DashboardFilters): Promise<Record<string, unknown>> {
-    return this.statsCache.get(dashboardCacheKey(filters), () => this.loadStats(filters));
+  public async stats(filters: DashboardFilters, signal?: AbortSignal): Promise<Record<string, unknown>> {
+    const key = dashboardCacheKey(filters);
+    try {
+      return await this.statsCache.get(key, () => this.loadStats(filters, signal));
+    } catch (error) {
+      if (signal?.aborted || !isAbortError(error)) throw error;
+      return this.statsCache.get(key, () => this.loadStats(filters));
+    }
   }
 
-  private async loadStats(filters: DashboardFilters): Promise<Record<string, unknown>> {
+  private async totalCount(filters: DashboardFilters): Promise<number> {
+    return this.totalCache.get(dashboardCacheKey(filters), async () => {
+      const query = buildLotWhere(filters);
+      const result = await this.pool.query<{ total: number }>(
+        `SELECT COUNT(*)::int AS total FROM market_lots ml WHERE ${query.where}`,
+        query.params,
+      );
+      return result.rows[0]?.total ?? 0;
+    });
+  }
+
+  private async loadStats(filters: DashboardFilters, signal?: AbortSignal): Promise<Record<string, unknown>> {
     const query = buildLotWhere(filters);
-    const result = await this.pool.query<Record<string, unknown>>(`
+    const result = await cancellableQuery<Record<string, unknown>>(this.pool, `
       WITH filtered AS MATERIALIZED (
         SELECT ml.id,ml.event_id,ml.auction_end,ml.final_bid,ml.current_bid,ml.last_seen_at
         FROM market_lots ml WHERE ${query.where}
-      ), filtered_media AS MATERIALIZED (
-        SELECT lm.type,lm.download_status,lm.size_bytes,lm.content_hash,lm.source_url,lm.storage_key
-        FROM lot_media lm
-        JOIN filtered f ON f.id=lm.market_lot_id
       ), lot_stats AS (
         SELECT
           COUNT(*)::int AS "totalLots",
@@ -335,19 +473,19 @@ export class DashboardRepository {
         JOIN lot_media_summary summary ON summary.market_lot_id=filtered.id
       ), document_stats AS (
         SELECT
-          COUNT(DISTINCT COALESCE(content_hash,source_url)) FILTER (
-            WHERE type='document'
-          )::int AS "totalDocuments",
-          COUNT(DISTINCT storage_key) FILTER (
-            WHERE type='document' AND download_status='downloaded'
+          COUNT(DISTINCT COALESCE(lm.content_hash,lm.source_url))::int AS "totalDocuments",
+          COUNT(DISTINCT lm.storage_key) FILTER (
+            WHERE lm.download_status='downloaded'
           )::int AS "downloadedDocuments"
-        FROM filtered_media
+        FROM filtered f
+        JOIN lot_media lm ON lm.market_lot_id=f.id AND lm.type='document'
       ), stored_media AS (
-        SELECT storage_key,MAX(size_bytes)::float AS size_bytes,
-          BOOL_OR(type='document') AS is_document
-        FROM filtered_media
-        WHERE download_status='downloaded' AND storage_key IS NOT NULL
-        GROUP BY storage_key
+        SELECT lm.storage_key,MAX(lm.size_bytes)::float AS size_bytes,
+          BOOL_OR(lm.type='document') AS is_document
+        FROM filtered f
+        JOIN lot_media lm ON lm.market_lot_id=f.id
+        WHERE lm.download_status='downloaded' AND lm.storage_key IS NOT NULL
+        GROUP BY lm.storage_key
       ), storage_stats AS (
         SELECT
           COALESCE(SUM(size_bytes) FILTER (WHERE is_document),0)::float AS "documentBytes",
@@ -356,7 +494,7 @@ export class DashboardRepository {
       )
       SELECT lot_stats.*,media_stats.*,document_stats.*,storage_stats.*
       FROM lot_stats CROSS JOIN media_stats CROSS JOIN document_stats CROSS JOIN storage_stats
-    `, query.params);
+    `, query.params, signal);
     return result.rows[0] ?? {};
   }
 
@@ -768,12 +906,7 @@ export class DashboardRepository {
     items: unknown[]; total: number; page: number; pageSize: number; nextCursor?: string;
   }> {
     const { where, params } = buildLotWhere(filters);
-    const totalResult = await cancellableQuery<{ total: number }>(
-      this.pool,
-      `SELECT COUNT(*)::int AS total FROM market_lots ml WHERE ${where}`,
-      params,
-      signal,
-    );
+    const totalPromise = this.totalCount(filters);
     const cursor = decodeAuctionCursor(filters.cursor);
     const useKeyset = (!filters.sort || filters.sort === 'auction_nearest') && (filters.page === 1 || Boolean(cursor));
     const sortBucket = `CASE WHEN ml.auction_end>=NOW() THEN 0 WHEN ml.auction_end<NOW() THEN 1 ELSE 2 END`;
@@ -794,7 +927,7 @@ export class DashboardRepository {
     const limit = `$${params.length}`;
     params.push(useKeyset ? 0 : (filters.page - 1) * filters.pageSize);
     const offset = `$${params.length}`;
-    const result = await cancellableQuery(
+    const [total, result] = await Promise.all([totalPromise, cancellableQuery(
       this.pool,
       `
       SELECT
@@ -837,7 +970,7 @@ export class DashboardRepository {
     ? `${sortBucket},${sortTime},${sortLotNumber},ml.id`
     : lotOrderBy(filters.sort)}
       LIMIT ${limit} OFFSET ${offset}
-    `, params, signal);
+    `, params, signal)]);
     const hasNext = useKeyset && result.rows.length > filters.pageSize;
     if (hasNext) result.rows.pop();
     const nextCursor = hasNext && result.rows.length ? encodeAuctionCursor(result.rows.at(-1)!) : undefined;
@@ -849,136 +982,77 @@ export class DashboardRepository {
       };
     });
     return {
-      items,total: totalResult.rows[0]?.total ?? 0,page: filters.page,pageSize: filters.pageSize,
+      items,total,page: filters.page,pageSize: filters.pageSize,
       ...(nextCursor ? { nextCursor } : {}),
     };
   }
 
-  public async facets(filters: DashboardFilters): Promise<{ total: number; facets: Record<LotFacetKey, LotFacetOption[]> }> {
-    return this.facetsCache.get(dashboardCacheKey(filters), () => this.loadFacets(filters));
+  public async facets(
+    filters: DashboardFilters,
+    signal?: AbortSignal,
+  ): Promise<{ total: number; facets: Record<LotFacetKey, LotFacetOption[]> }> {
+    const key = dashboardCacheKey(filters);
+    try {
+      return await this.facetsCache.get(key, () => this.loadFacets(filters, signal));
+    } catch (error) {
+      if (signal?.aborted || !isAbortError(error)) throw error;
+      return this.facetsCache.get(key, () => this.loadFacets(filters));
+    }
   }
 
-  private async loadFacets(filters: DashboardFilters): Promise<{
+  private async loadFacets(filters: DashboardFilters, signal?: AbortSignal): Promise<{
     total: number; facets: Record<LotFacetKey, LotFacetOption[]>;
   }> {
-    type FacetDefinition = {
-      key: LotFacetKey; value: string; label?: string; limit?: number; orderBy?: string;
-      groupedValue: string; groupedLabel?: string;
-    };
-    const definitions: FacetDefinition[] = [
-      { key: 'site', value: 'ml.site', groupedValue: 'ml.site' },
-      { key: 'assetType', value: 'ml.asset_type', groupedValue: 'ml.asset_type' },
-      { key: 'event', value: 'ml.event_id::text', label: "COALESCE(ae.name,'Evento sem nome')",
-        groupedValue: 'ml.event_id::text', groupedLabel: "COALESCE(ae.name,'Evento sem nome')", limit: 500 },
-      { key: 'status', value: canonicalStatusSql('ml'), groupedValue: canonicalStatusSql('ml') },
-      { key: 'brand', value: normalizedTextSql('ml.brand'), label: 'ml.brand',
-        groupedValue: normalizedTextSql('ml.brand'), groupedLabel: 'ml.brand' },
-      { key: 'model', value: normalizedTextSql('ml.model'), label: 'ml.model',
-        groupedValue: normalizedTextSql('ml.model'), groupedLabel: 'ml.model', limit: 1000 },
-      { key: 'year', value: 'ml.model_year::text', groupedValue: 'ml.model_year::text', orderBy: 'value::int DESC' },
-      { key: 'state', value: 'ml.state', groupedValue: 'ml.state' },
-      {
-        key: 'city',
-        value: normalizedCitySql('ml'),
-        label: 'ml.city',
-        groupedValue: normalizedCitySql('ml'),
-        groupedLabel: 'ml.city',
-        limit: 500,
-      },
-      { key: 'neighborhood', value: `(SELECT ${normalizedTextSql('red.neighborhood')} FROM real_estate_details red WHERE red.market_lot_id=ml.id)`,
-        label: "(SELECT red.neighborhood FROM real_estate_details red WHERE red.market_lot_id=ml.id)",
-        groupedValue: normalizedTextSql('red.neighborhood'), groupedLabel: 'red.neighborhood', limit: 1000 },
-      { key: 'propertyType', value: `(SELECT ${normalizedTextSql('red.property_type')} FROM real_estate_details red WHERE red.market_lot_id=ml.id)`,
-        label: '(SELECT red.property_type FROM real_estate_details red WHERE red.market_lot_id=ml.id)',
-        groupedValue: normalizedTextSql('red.property_type'), groupedLabel: 'red.property_type', limit: 500 },
-      { key: 'vehicleCondition', value: `(SELECT ${normalizedTextSql('vd.vehicle_condition')} FROM vehicle_details vd WHERE vd.market_lot_id=ml.id)`,
-        label: '(SELECT vd.vehicle_condition FROM vehicle_details vd WHERE vd.market_lot_id=ml.id)',
-        groupedValue: normalizedTextSql('vd.vehicle_condition'), groupedLabel: 'vd.vehicle_condition', limit: 100 },
-      { key: 'origin', value: normalizedTextSql('ml.origin'), label: 'ml.origin',
-        groupedValue: normalizedTextSql('ml.origin'), groupedLabel: 'ml.origin', limit: 500 },
-      { key: 'consignor', value: normalizedTextSql('ml.consignor'), label: 'ml.consignor',
-        groupedValue: normalizedTextSql('ml.consignor'), groupedLabel: 'ml.consignor', limit: 1000 },
-      { key: 'classification', value: normalizedTextSql('ml.classification'), label: 'ml.classification',
-        groupedValue: normalizedTextSql('ml.classification'), groupedLabel: 'ml.classification' },
-      { key: 'fuel', value: normalizedTextSql('ml.fuel'), label: 'ml.fuel',
-        groupedValue: normalizedTextSql('ml.fuel'), groupedLabel: 'ml.fuel' },
-      { key: 'transmission', value: normalizedTextSql('ml.transmission'), label: 'ml.transmission',
-        groupedValue: normalizedTextSql('ml.transmission'), groupedLabel: 'ml.transmission' },
-      {
-        key: 'runningAtEntry',
-        value: "CASE WHEN ml.running_at_entry IS TRUE THEN 'yes' WHEN ml.running_at_entry IS FALSE THEN 'no' END",
-        groupedValue: "CASE WHEN ml.running_at_entry IS TRUE THEN 'yes' WHEN ml.running_at_entry IS FALSE THEN 'no' END",
-      },
-    ];
-    const selectedKeys = new Set<LotFacetKey>([
-      ...(filters.sites?.length ? ['site' as const] : []),
-      ...(filters.assetTypes?.length ? ['assetType' as const] : []),
-      ...(filters.eventIds?.length ? ['event' as const] : []),
-      ...(filters.statuses?.length ? ['status' as const] : []),
-      ...(filters.brands?.length ? ['brand' as const] : []),
-      ...(filters.models?.length ? ['model' as const] : []),
-      ...(filters.years?.length ? ['year' as const] : []),
-      ...(filters.states?.length ? ['state' as const] : []),
-      ...(filters.cities?.length ? ['city' as const] : []),
-      ...(filters.neighborhoods?.length ? ['neighborhood' as const] : []),
-      ...(filters.propertyTypes?.length ? ['propertyType' as const] : []),
-      ...(filters.vehicleConditions?.length ? ['vehicleCondition' as const] : []),
-      ...(filters.origins?.length ? ['origin' as const] : []),
-      ...(filters.consignors?.length ? ['consignor' as const] : []),
-      ...(filters.classifications?.length ? ['classification' as const] : []),
-      ...(filters.fuels?.length ? ['fuel' as const] : []),
-      ...(filters.transmissions?.length ? ['transmission' as const] : []),
-      ...(filters.runningAtEntry !== undefined ? ['runningAtEntry' as const] : []),
-    ]);
+    const realEstateCatalog = (filters.assetTypes ?? []).includes('real_estate');
+    const catalogKeys = new Set<LotFacetKey>(realEstateCatalog ? REAL_ESTATE_FACET_KEYS : VEHICLE_FACET_KEYS);
+    const definitions = FACET_DEFINITIONS.filter((definition) => catalogKeys.has(definition.key));
+    const selectedKeys = selectedFacetKeys(filters);
     const groupedDefinitions = definitions.filter((definition) => !selectedKeys.has(definition.key));
     const selectedDefinitions = definitions.filter((definition) => selectedKeys.has(definition.key));
-    const totalQuery = buildLotWhere(filters);
-    const [totalResult, groupedResult, ...selectedResults] = await Promise.all([
-      this.pool.query<{ total: number }>(
-        `SELECT COUNT(*)::int AS total FROM market_lots ml WHERE ${totalQuery.where}`,
-        totalQuery.params,
-      ),
-      this.groupedFacetOptions(groupedDefinitions, filters),
-      ...selectedDefinitions.map((definition) => this.facetOptions(definition, filters)),
+    const [total, groupedResult, ...selectedResults] = await Promise.all([
+      this.totalCount(filters),
+      this.groupedFacetOptions(groupedDefinitions, filters, signal),
+      ...selectedDefinitions.map((definition) => this.facetOptions(definition, filters, signal)),
     ]);
     const facets = Object.fromEntries(
-      definitions.map((definition) => [definition.key, []]),
+      ALL_FACET_KEYS.map((key) => [key, []]),
     ) as unknown as Record<LotFacetKey, LotFacetOption[]>;
     for (const row of groupedResult.rows) facets[row.key]?.push(row);
     selectedDefinitions.forEach((definition, index) => {
       facets[definition.key] = selectedResults[index]?.rows ?? [];
     });
-    return { total: totalResult.rows[0]?.total ?? 0, facets };
+    return { total, facets };
   }
 
   private async groupedFacetOptions(
-    definitions: Array<{
-      key: LotFacetKey; groupedValue: string; groupedLabel?: string; limit?: number; orderBy?: string;
-    }>,
+    definitions: FacetDefinition[],
     filters: DashboardFilters,
+    signal?: AbortSignal,
   ) {
     if (!definitions.length) return { rows: [] as Array<LotFacetOption & { key: LotFacetKey }> };
     const query = buildLotWhere(filters);
+    const columns = new Set<string>();
+    for (const definition of definitions) {
+      columns.add(definition.value);
+      if (definition.label) columns.add(definition.label);
+    }
+    const selectedColumns = [...columns];
     const values = definitions.map((definition) => `(
       '${definition.key}'::text,
-      (${definition.groupedValue})::text,
-      (${definition.groupedLabel ?? definition.groupedValue})::text
+      (filtered.${definition.value})::text,
+      (filtered.${definition.label ?? definition.value})::text
     )`).join(',');
-    const result = await this.pool.query<LotFacetOption & { key: LotFacetKey }>(`
-      WITH expanded AS MATERIALIZED (
-        SELECT facet.key,facet.value,facet.label
-        FROM market_lots ml
-        LEFT JOIN auction_events ae ON ae.id=ml.event_id
-        LEFT JOIN real_estate_details red ON red.market_lot_id=ml.id
-        LEFT JOIN vehicle_details vd ON vd.market_lot_id=ml.id
-        CROSS JOIN LATERAL (VALUES ${values}) facet(key,value,label)
+    const result = await cancellableQuery<LotFacetOption & { key: LotFacetKey }>(this.pool, `
+      WITH filtered AS MATERIALIZED (
+        SELECT ${selectedColumns.map((column) => `${facetColumnSql(column)} AS "${column}"`).join(',')}
+        FROM market_lots ml ${facetJoins(selectedColumns)}
         WHERE ${query.where}
-          AND NULLIF(BTRIM(facet.value), '') IS NOT NULL
       ), grouped AS (
-        SELECT key,value,
-          (ARRAY_AGG(label ORDER BY OCTET_LENGTH(label)-LENGTH(label) DESC, label DESC NULLS LAST))[1] AS label,
-          COUNT(*)::int AS count
-        FROM expanded GROUP BY key,value
+        SELECT facet.key,facet.value,MAX(facet.label) AS label,COUNT(*)::int AS count
+        FROM filtered
+        CROSS JOIN LATERAL (VALUES ${values}) facet(key,value,label)
+        WHERE NULLIF(BTRIM(facet.value), '') IS NOT NULL
+        GROUP BY facet.key,facet.value
       )
       SELECT key,value,label,count
       FROM grouped
@@ -986,7 +1060,7 @@ export class DashboardRepository {
         CASE WHEN key='year' THEN value::int END DESC NULLS LAST,
         CASE WHEN key<>'year' THEN count END DESC NULLS LAST,
         label ASC
-    `, query.params);
+    `, query.params, signal);
     const limits = new Map(definitions.map((definition) => [definition.key, definition.limit ?? 120]));
     const counts = new Map<LotFacetKey, number>();
     return {
@@ -999,29 +1073,27 @@ export class DashboardRepository {
   }
 
   private async facetOptions(
-    definition: { key: LotFacetKey; value: string; label?: string; limit?: number; orderBy?: string },
+    definition: FacetDefinition,
     filters: DashboardFilters,
+    signal?: AbortSignal,
   ) {
     const query = buildLotWhere(filters, definition.key);
-    const label = definition.label ?? definition.value;
     query.params.push(definition.limit ?? 120);
-    return this.pool.query<LotFacetOption>(`
-      WITH filtered AS (
-        SELECT ${definition.value} AS value, ${label} AS label
-        FROM market_lots ml
-        LEFT JOIN auction_events ae ON ae.id = ml.event_id
+    const columns = [...new Set([definition.value, definition.label ?? definition.value])];
+    const valueSql = facetColumnSql(definition.value);
+    const labelSql = facetColumnSql(definition.label ?? definition.value);
+    return cancellableQuery<LotFacetOption>(this.pool, `
+      SELECT value,MAX(label) AS label,COUNT(*)::int AS count
+      FROM (
+        SELECT (${valueSql})::text AS value, (${labelSql})::text AS label
+        FROM market_lots ml ${facetJoins(columns)}
         WHERE ${query.where}
-      )
-      SELECT value::text,
-        (ARRAY_AGG(label::text ORDER BY OCTET_LENGTH(label::text)-LENGTH(label::text) DESC,
-          label::text DESC NULLS LAST))[1] AS label,
-        COUNT(*)::int AS count
-      FROM filtered
-      WHERE NULLIF(BTRIM(value::text), '') IS NOT NULL
-      GROUP BY value
-      ORDER BY ${definition.orderBy ?? 'COUNT(*) DESC, label ASC'}
+      ) filtered
+      WHERE NULLIF(BTRIM(filtered.value), '') IS NOT NULL
+      GROUP BY filtered.value
+      ORDER BY ${definition.orderBy ?? 'COUNT(*) DESC, filtered.value ASC'}
       LIMIT $${query.params.length}
-    `, query.params);
+    `, query.params, signal);
   }
 
   public async lot(id: number): Promise<unknown | undefined> {

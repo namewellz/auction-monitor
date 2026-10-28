@@ -43,6 +43,8 @@ const state = {
   requestController: null,
   cursor: null,
   nextCursor: null,
+  historyKey: null,
+  historyLoadedAt: 0,
   pageCursors: new Map([[1, null]]),
   openFacets: new Set(facetConfig.filter((facet) => facet.open).map((facet) => facet.key)),
 };
@@ -231,15 +233,25 @@ async function refreshCatalog(updateUrl = true, scope = 'all') {
   if (updateUrl) syncUrl();
   reflectStateInControls();
   byId('lot-list').classList.add('loading');
+  if (!byId('lot-list').children.length) byId('result-count').textContent = 'Carregando...';
   const filterParams = buildParams(false);
   const lotParams = buildParams(true);
   try {
     const fullRefresh = scope === 'all';
+    const historyKey = state.filters.site.join(',');
+    const loadHistory = fullRefresh
+      && (state.historyKey !== historyKey || Date.now() - state.historyLoadedAt > 60_000);
+    if (fullRefresh && loadHistory) {
+      state.historyKey = historyKey;
+      state.historyLoadedAt = Date.now();
+    }
     const auxiliary = fullRefresh ? Promise.all([
-      api(`/api/lots/facets?${filterParams}`, { signal: controller.signal }),
-      api(`/api/stats?${filterParams}`, { signal: controller.signal }),
-      api(`/api/collection/history?limit=10${state.filters.site.length === 1 ? `&site=${encodeURIComponent(state.filters.site[0])}` : ''}`,
-        { signal: controller.signal }),
+      api(`/api/lots/facets?${filterParams}`, { signal: controller.signal }).catch(() => null),
+      api(`/api/stats?${filterParams}`, { signal: controller.signal }).catch(() => null),
+      loadHistory
+        ? api(`/api/collection/history?limit=10${state.filters.site.length === 1 ? `&site=${encodeURIComponent(state.filters.site[0])}` : ''}`,
+          { signal: controller.signal }).catch(() => null)
+        : Promise.resolve(null),
     ]) : null;
     const lotData = await api(`/api/lots?${lotParams}`, { signal: controller.signal });
     if (sequence !== state.requestSequence) return;
@@ -251,10 +263,12 @@ async function refreshCatalog(updateUrl = true, scope = 'all') {
     if (!auxiliary) return;
     const [facetData, statsData, historyData] = await auxiliary;
     if (sequence !== state.requestSequence) return;
-    state.facets = facetData.facets;
-    renderStats(statsData);
-    renderCollectionHistory(historyData);
-    renderFacets();
+    if (facetData) {
+      state.facets = facetData.facets;
+      renderFacets();
+    }
+    if (statsData) renderStats(statsData);
+    if (historyData) renderCollectionHistory(historyData);
   } catch (error) {
     if (error.name === 'AbortError') return;
     if (sequence !== state.requestSequence) return;
@@ -519,14 +533,23 @@ function clearFilters() {
   applyState();
 }
 
+let pendingRefresh = null;
+
 function applyState(scope = 'all') {
   state.cursor = null;
   state.nextCursor = null;
   state.pageCursors = new Map([[1, null]]);
-  void refreshCatalog(true, scope);
+  renderActiveFilters();
+  clearTimeout(pendingRefresh);
+  pendingRefresh = setTimeout(() => {
+    pendingRefresh = null;
+    void refreshCatalog(true, scope);
+  }, 180);
 }
 
 function changePage(page) {
+  clearTimeout(pendingRefresh);
+  pendingRefresh = null;
   const totalPages = Math.max(1, Math.ceil(state.total / state.pageSize));
   if (page < 1 || page > totalPages) return;
   if ((!state.sort || state.sort === 'auction_nearest') && page === state.page + 1 && state.nextCursor) {

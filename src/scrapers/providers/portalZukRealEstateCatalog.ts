@@ -415,7 +415,7 @@ export function parsePortalZukLot(html: string, pageUrl: string): LotData {
   const status = saleStatus($('.card-action-header-title').text(), auctionEnd, currentBid);
   const features = featureValues($);
   const documents = $('.property-documents-item[href]').map((_, element) => {
-    const url = absoluteUrl($(element).attr('href') ?? '');
+    const url = normalizeDocumentUrl(absoluteUrl($(element).attr('href') ?? ''));
     const label = compact($(element).find('.property-documents-item-label').text() || $(element).text());
     if (!url || !/^https?:/i.test(url)) return undefined;
     return { url, label, documentType: documentType(label) };
@@ -635,9 +635,7 @@ async function withPartnerDocuments(data: LotData): Promise<LotData> {
       const target = decodeURIComponent(new URL(href, LUCRA_BASE).searchParams.get('url') ?? '');
       if (!/^https?:/i.test(target)) return;
       const label = cleanDocumentLabel($(element).text());
-      const url = target.includes(PRIVATE_DOC_HOST)
-        ? `${LUCRA_BASE}/api/zuk-matricula?url=${encodeURIComponent(target)}`
-        : target;
+      const url = normalizeDocumentUrl(target);
       if (!label || known.has(url) || known.has(target)) return;
       known.add(url);
       extra.push({ url, label, documentType: documentType(label) });
@@ -651,6 +649,22 @@ async function withPartnerDocuments(data: LotData): Promise<LotData> {
 
 function cleanDocumentLabel(value: string): string {
   return compact(value.replace(/[↓↑→←]/g, '')).replace(/\s*pdf$/i, '').trim();
+}
+
+// O CloudFront de `documentacao.portalzuk.com.br` entrega URLs assinadas (Expires/Signature) que
+// mudam a cada coleta — gravadas como source_url elas criavam uma linha nova por coleta. O
+// espelho parceiro serve o mesmo arquivo a partir do caminho estavel, entao normalizamos para ele.
+function normalizeDocumentUrl(url: string): string {
+  if (!url) return url;
+  let parsed: URL;
+  try {
+    parsed = new URL(url);
+  } catch {
+    return url;
+  }
+  if (parsed.hostname !== PRIVATE_DOC_HOST) return url;
+  parsed.search = '';
+  return `${LUCRA_BASE}/api/zuk-matricula?url=${encodeURIComponent(parsed.toString())}`;
 }
 
 function compactDetails(values: Record<string, string>): Record<string, string> {

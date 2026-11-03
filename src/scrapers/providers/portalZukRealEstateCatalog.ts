@@ -420,6 +420,14 @@ export function parsePortalZukLot(html: string, pageUrl: string): LotData {
     if (!url || !/^https?:/i.test(url)) return undefined;
     return { url, label, documentType: documentType(label) };
   }).get().filter((document): document is { url: string; label: string; documentType: string } => Boolean(document));
+  // Matricula, ficha de analise, laudo e termo so aparecem com href para visitante logado;
+  // sem sessao o portal devolve href vazio e abre o modal de login. Guardamos os rotulos
+  // para o painel mostrar o que existe na origem mas nao pode ser baixado.
+  const restrictedDocuments = unique($('.property-documents-item').map((_, element) => {
+    const url = absoluteUrl($(element).attr('href') ?? '');
+    if (/^https?:/i.test(url)) return '';
+    return compact($(element).find('.property-documents-item-label').text() || $(element).text());
+  }).get().filter(Boolean));
   const imageUrls = unique($('img[src*="imagens.portalzuk.com.br/detalhe/"]').map((_, element) =>
     absoluteUrl($(element).attr('src') ?? '')).get().filter(Boolean));
   const consignor = $('img[src*="/comitentes/"][alt]').first().attr('alt')?.trim() ?? '';
@@ -462,6 +470,7 @@ export function parsePortalZukLot(html: string, pageUrl: string): LotData {
       comitente: consignor,
       portalZukEventId: eventCode,
       portalZukLotId: lotCode,
+      ...(restrictedDocuments.length ? { documentosComLogin: restrictedDocuments.join(', ') } : {}),
     }),
   };
 }

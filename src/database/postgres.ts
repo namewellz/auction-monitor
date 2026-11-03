@@ -1,7 +1,13 @@
 import { Pool } from 'pg';
 
 export function createPostgresPool(connectionString: string): Pool {
-  return new Pool({ connectionString, max: 12, idleTimeoutMillis: 30_000 });
+  const pool = new Pool({ connectionString, max: 12, idleTimeoutMillis: 30_000 });
+  // Quando o Postgres reinicia/derruba conexoes ociosas o pg-pool emite 'error' no pool;
+  // sem listener isso vira "Unhandled 'error' event" e derruba o processo inteiro.
+  pool.on('error', (error) => {
+    console.error('[postgres] idle client error', error instanceof Error ? error.message : error);
+  });
+  return pool;
 }
 
 export async function runPostgresMigrations(pool: Pool): Promise<void> {

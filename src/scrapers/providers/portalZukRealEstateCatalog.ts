@@ -238,7 +238,7 @@ export class PortalZukRealEstateCatalogProvider implements CatalogProvider {
     if (page.status < 200 || page.status >= 300) {
       throw new Error(`Portal Zuk lot detail failed: HTTP ${page.status}`);
     }
-    return parsePortalZukLot(page.html, canonicalUrl(page.url || url));
+    return withPartnerDocuments(parsePortalZukLot(page.html, canonicalUrl(page.url || url)));
   }
 
   public async scrapePartnerLot(url: string): Promise<LotData> {
@@ -604,6 +604,53 @@ function canonicalUrl(value: string): string {
 
 function absoluteUrl(value: string): string {
   return value ? new URL(value, `${BASE_URL}/`).toString() : '';
+}
+
+const LUCRA_BASE = 'https://oportunidades.lucraleiloes.com.br';
+const PRIVATE_DOC_HOST = 'documentacao.portalzuk.com.br';
+
+// Matricula, ficha, laudo e termo ficam em `documentacao.portalzuk.com.br`, um bucket privado
+// (S3 devolve 403 para o publico) que o portal so expoe com sessao autenticada. Nos lotes do
+// programa Bradesco o parceiro Lucra publica as mesmas URLs e serve o PDF pelo proprio proxy
+// `/api/zuk-matricula?url=`, entao usamos essa copia publica quando a matricula esta faltando.
+async function withPartnerDocuments(data: LotData): Promise<LotData> {
+  const restricted = normalize(data.additionalDetails?.documentosComLogin ?? '');
+  const hasMatricula = (data.documents ?? []).some((document) => document.documentType === 'matricula');
+  // So vale a pena consultar o parceiro nos lotes do programa Bradesco, que e o que ele espelha.
+  if (hasMatricula || !restricted.includes('matricula') || !/bradesco/i.test(data.consignor ?? '')) return data;
+  const eventCode = data.eventExternalCode ?? '';
+  const lotCode = data.externalCode ?? '';
+  if (!eventCode || !lotCode) return data;
+  try {
+    const response = await fetch(`${LUCRA_BASE}/bradesco/imovel/${eventCode}-${lotCode}`, {
+      headers: { Accept: 'text/html', 'User-Agent': 'Mozilla/5.0 (compatible; AuctionMonitor/1.0)' },
+      signal: AbortSignal.timeout(20_000),
+    });
+    if (!response.ok) return data;
+    const $ = cheerio.load(await response.text());
+    const known = new Set((data.documents ?? []).map((document) => document.url));
+    const extra: NonNullable<LotData['documents']> = [];
+    $('a[href*="/api/zuk-matricula"]').each((_, element) => {
+      const href = $(element).attr('href') ?? '';
+      const target = decodeURIComponent(new URL(href, LUCRA_BASE).searchParams.get('url') ?? '');
+      if (!/^https?:/i.test(target)) return;
+      const label = cleanDocumentLabel($(element).text());
+      const url = target.includes(PRIVATE_DOC_HOST)
+        ? `${LUCRA_BASE}/api/zuk-matricula?url=${encodeURIComponent(target)}`
+        : target;
+      if (!label || known.has(url) || known.has(target)) return;
+      known.add(url);
+      extra.push({ url, label, documentType: documentType(label) });
+    });
+    if (!extra.length) return data;
+    return { ...data, documents: [...(data.documents ?? []), ...extra] };
+  } catch {
+    return data;
+  }
+}
+
+function cleanDocumentLabel(value: string): string {
+  return compact(value.replace(/[↓↑→←]/g, '')).replace(/\s*pdf$/i, '').trim();
 }
 
 function compactDetails(values: Record<string, string>): Record<string, string> {

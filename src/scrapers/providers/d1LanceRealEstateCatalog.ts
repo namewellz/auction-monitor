@@ -1,5 +1,6 @@
 import * as cheerio from 'cheerio';
 import type { CatalogPage, CatalogProvider } from '../base/catalogProvider.js';
+import { TerminalLotUnavailableError } from '../../errors/terminalLotUnavailableError.js';
 import type { LotData } from '../../types/lot.js';
 
 const BASE_URL = 'https://d1lance.com.br';
@@ -34,7 +35,13 @@ export class D1LanceRealEstateCatalogProvider implements CatalogProvider {
     if (!response.ok) throw new Error(`D1 Lance lot detail failed: HTTP ${response.status}`);
     const $ = cheerio.load(await response.text());
     const lot = structuredLot($);
-    if (!lot) throw new Error(`D1 Lance structured lot not found: ${url}`);
+    if (!lot) {
+      // Paginas de lote removido/encerrado no D1 Lance trocam o conteudo por "Acabou :(".
+      if (/^acabou/.test(normalize($('h1').first().text()))) {
+        throw new TerminalLotUnavailableError(`D1 Lance lot is no longer available: ${url}`);
+      }
+      throw new Error(`D1 Lance structured lot not found: ${url}`);
+    }
     const id = String(lot.id ?? /\/(\d+)(?:\?|$)/.exec(url)?.[1] ?? url);
     const location = lot.localizacao_dos_bens?.[0] ?? {};
     const estate = lot.bens_do_lote?.[0]?.imovel ?? {};
@@ -47,20 +54,40 @@ export class D1LanceRealEstateCatalogProvider implements CatalogProvider {
     const endings = rounds.map((item: any) => date(item.termino)).filter((value: Date | undefined): value is Date => Boolean(value));
     const starts = rounds.map((item: any) => date(item.inicio)).filter((value: Date | undefined): value is Date => Boolean(value));
     const currentBid = number(lot.ultimo_lance?.valor ?? lot.ultimo_lance);
-    const images = unique($('a[href*="midia.d1lance.com.br/public/imgs/lotes/imagens/"]')
+    const images: string[] = unique($('a[href*="midia.d1lance.com.br/public/imgs/lotes/imagens/"]')
       .map((_, element) => $(element).attr('href') ?? '').get().filter(Boolean));
-    const media = parseJsonArray(lot.midias_do_lote);
-    for (const item of media) {
-      const path = item?.midias?.url;
-      if (path && Number(item?.midias?.categoria_de_midia) === 7) images.push(new URL(path, MEDIA_URL).toString());
-    }
-    const documents = $('a[href]').map((_, element) => {
+    const documents: NonNullable<LotData['documents']> = $('a[href]').map((_, element) => {
       const href = absolute($(element).attr('href') ?? '');
       const label = compact($(element).text());
-      return /(?:\.pdf(?:\?|$)|\/download\/|\/documentos?\/)/i.test(href)
+      return /(?:\.pdf(?:\?|$)|\.zip(?:\?|$)|\.docx?(?:\?|$)|\.xlsx?(?:\?|$)|\/download\/|\/documentos?\/)/i.test(href)
         ? { url: href, label: label || 'Documento', documentType: documentType(label || href) }
         : undefined;
     }).get().filter((item): item is NonNullable<typeof item> => Boolean(item));
+    // D1 Lance serves the lot files only through Livewire (anchors without href), labelled by
+    // `data-arquivo` and identified by `data-id` (the media id) — index them before walking the payload.
+    const fileLabels = new Map<string, string>();
+    $('a[data-arquivo][data-id]').each((_, element) => {
+      const label = capitalize(compact($(element).attr('data-arquivo') ?? $(element).text()));
+      const id = compact($(element).attr('data-id') ?? '');
+      if (label && id) fileLabels.set(id, label);
+    });
+    let videoUrl: string | undefined;
+    const media = parseJsonArray(lot.midias_do_lote);
+    for (const item of media) {
+      const path = item?.midias?.url;
+      if (!path) continue;
+      const url = new URL(path, MEDIA_URL).toString();
+      if (Number(item?.midias?.categoria_de_midia) === 7) {
+        images.push(url);
+        continue;
+      }
+      if (/\.(?:mp4|m3u8|mov|webm)(?:\?|$)/i.test(url)) {
+        videoUrl ??= url;
+        continue;
+      }
+      const label = fileLabels.get(compact(item?.midia_id ?? '')) ?? fileLabel(path);
+      documents.push({ url, label, documentType: documentType(label) });
+    }
     const title = compact(lot.titulo_lote ?? lot.subtitulo_do_lote ?? lot.titulo_do_lote ?? property.identificador_do_bem ?? `Imóvel ${id}`);
     const area = localizedNumber(estate.area_construida ?? estate.area_terreno);
     const address = compact([location.rua, location.numero, location.complemento].filter(Boolean).join(', '));
@@ -95,7 +122,8 @@ export class D1LanceRealEstateCatalogProvider implements CatalogProvider {
       eventExternalCode: String(lot.leilao_id ?? ''),
       eventUrl: url,
       imageUrls: unique(images),
-      documents,
+      ...(videoUrl ? { videoUrl } : {}),
+      documents: uniqueDocuments(documents),
       additionalDetails: {
         matricula: compact(estate.matricula ?? ''),
         modalidade: compact(lot.leilao?.modalidade?.nome ?? ''),
@@ -125,6 +153,22 @@ function normalize(value: unknown): string { return compact(value).normalize('NF
 function number(value: unknown): number { const parsed = Number(value ?? 0); return Number.isFinite(parsed) ? parsed : 0; }
 function localizedNumber(value: unknown): number { const parsed = Number(String(value ?? '').replace(/\.(?=\d{3}(?:\D|$))/g, '').replace(',', '.')); return Number.isFinite(parsed) ? parsed : 0; }
 function parseJsonArray(value: unknown): any[] { if (Array.isArray(value)) return value; try { const parsed = JSON.parse(String(value ?? '[]')); return Array.isArray(parsed) ? parsed : []; } catch { return []; } }
+function uniqueDocuments(values: NonNullable<LotData['documents']>): NonNullable<LotData['documents']> {
+  const byUrl = new Map<string, NonNullable<LotData['documents']>[number]>();
+  for (const document of values) if (!byUrl.has(document.url)) byUrl.set(document.url, document);
+  return [...byUrl.values()];
+}
+function fileLabel(path: string): string {
+  const name = compact(decodeURIComponent(path.split('/').pop() ?? '').replace(/_/g, ' '));
+  const compacted = name.replace(/[^a-z0-9]+/gi, '').toLowerCase();
+  if (compacted.includes('matricula')) return 'Matrícula';
+  if (compacted.includes('edital')) return 'Edital';
+  if (compacted.includes('laudo') || compacted.includes('avaliacao')) return 'Laudo de avaliação';
+  if (compacted.includes('contrato')) return 'Contrato';
+  if (compacted.includes('cpf') || compacted.includes('cnpj') || compacted.includes('documentos')) return 'Documentos pessoais';
+  return capitalize(name) || 'Documento';
+}
+function capitalize(value: string): string { return value ? value.charAt(0).toUpperCase() + value.slice(1) : value; }
 function round(values: any[], name: string): any | undefined { return values.find((item) => item?.nome === name); }
 function date(value: unknown): Date | undefined { if (!value) return undefined; const parsed = new Date(`${String(value).replace(' ', 'T').replace(/\.\d+$/, '')}-03:00`); return Number.isNaN(parsed.getTime()) ? undefined : parsed; }
 function sleep(ms: number): Promise<void> { return new Promise((resolve) => setTimeout(resolve, ms)); }

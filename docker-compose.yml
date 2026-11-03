@@ -1,6 +1,9 @@
 services:
   postgres:
     image: postgres:17-alpine
+    # /dev/shm padrao do Docker e 64 MB e o work_mem do banco e 32 MB: consultas paralelas
+    # falham com "could not resize shared memory segment" e derrubam o download de midia.
+    shm_size: 1gb
     environment:
       POSTGRES_DB: ${POSTGRES_DB}
       POSTGRES_USER: ${POSTGRES_USER}
